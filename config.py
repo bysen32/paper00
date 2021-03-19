@@ -1,0 +1,9 @@
+BATCH_SIZE = 80
+LR = 0.001
+WD = 1e-4
+SAVE_FREQ = 1
+INPUT_SIZE = (224, 224)
+resume = ""
+test_model = "model.ckpt"
+save_dir = "./save/"
+DATA_MODE = "dev"
