@@ -76,12 +76,12 @@ for epoch in range(start_epoch, 500):
         raw_loss2 = creterion(raw_logits2, label)
 
         projected_features1, projected_features2 = projected_features
-        # target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
-        # dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features1, projected_features2, target)
+        # resnet50 224x224 lambda=1 project+cosine_similarity acc:80.0%
+        target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
+        dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
+            projected_features1, projected_features2, target)
         # dist_loss = torch.nn.MSELoss(reduction="mean")(projected_features1, projected_features2)
-        # resnet50 224x224 lambda=1 project+L1Loss acc:
-        dist_loss = torch.nn.L1Loss(reduction="mean")(
-            projected_features1, projected_features2)
+        # dist_loss = torch.nn.L1Loss(reduction="mean")(projected_features1, projected_features2)
 
         total_loss = raw_loss1 + raw_loss2 + dist_loss
         total_loss.backward()
