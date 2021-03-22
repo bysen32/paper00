@@ -25,13 +25,11 @@ else:
 # read dataset
 # trainset = dataset.CUB(root="./CUB_200_2011", is_train=True, data_len=None)
 trainset = dataset.CUB_Train(root="./CUB_200_2011")
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, drop_last=False)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, drop_last=False)
 
 # testset = dataset.CUB(root="./CUB_200_2011", is_train=False, data_len=None)
 testset = dataset.CUB_Test(root="./CUB_200_2011")
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=BATCH_SIZE, shuffle=False, num_workers=8, drop_last=False)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=8, drop_last=False)
 
 # define model
 net = model.MyNet()
@@ -43,7 +41,7 @@ if resume:
     ckpt = torch.load(resume)
     net.load_State_dict(ckpt["net_state_dict"])
     start_epoch = ckpt["epoch"] + 1
-creterion = torch.nn.CrossEntropyLoss()
+creterion = torch.nn.CrossEntropyLoss().cuda()
 
 # define optimizers
 raw_parameters = list(net.parameters())
@@ -53,6 +51,10 @@ raw_optimizer = torch.optim.SGD(
 schedulers = [
     MultiStepLR(raw_optimizer, milestones=[60, 100], gamma=0.1),
 ]
+
+# ----------------- pairs struct -----------------
+rank_criterion = nn.MarginRankLoss(margin=0.05)
+softmax_layer = nn.Softmax(dim=1).cuda()
 
 net = net.cuda()
 net = DataParallel(net)
@@ -70,7 +72,7 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, projected_features = net((images1, images2))
+        raw_logits, _, projected_features, pairs_logits, pairs_labels = net((images1, images2))
         raw_logits1, raw_logits2 = raw_logits
         raw_loss1 = creterion(raw_logits1, label)
         raw_loss2 = creterion(raw_logits2, label)
@@ -83,10 +85,33 @@ for epoch in range(start_epoch, 500):
         # dist_loss = torch.nn.MSELoss(reduction="mean")(projected_features1, projected_features2)
         # dist_loss = torch.nn.L1Loss(reduction="mean")(projected_features1, projected_features2)
 
-        total_loss = raw_loss1 + raw_loss2 + 100 * dist_loss
+        # ---------- pairs struct ---------------------
+        logit1_self, logit1_other, logit2_self, logit2_other = pairs_logits
+        labels1, labels2 = pairs_labels
+        labels1 = labels1.cuda()
+        labels2 = labels2.cuda()
+        self_logits = torch.zero(2*batch_size, 200).cuda()
+        other_logits = torch.zero(2*batch_size, 200).cuda()
+        self_logits[:batch_size] = logits1_self
+        self_logits[batch_size:] = logits2_self
+        other_logits[:batch_size] = logit1_other
+        other_logits[batch_size:] = logit2_other
+
+        logits = torch.cat([self.logits, other_logits], dim=0)
+        targets = torch.cat([labels1, labels2, labels1, labels2], dim=0)
+        softmax_loss = criterion(logitis, targets)
+
+        self_scores = softmax_layer(self_logits)[torch.arange(2*batch_size).cuda().long(), toch.cat([labels1, labels2], dim=0)]
+        other_scores = softmax_layer(other_logits)[torch.arange(2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
+        flag = torch.ones([2*batch_size, ]).cuda()
+        rank_loss = rank_criterion(self_scores, other_scores, flag)
+
+        total_loss = raw_loss1 + raw_loss2 + 100 * dist_loss + softmax_loss + rank_loss
         total_loss.backward()
 
         raw_optimizer.step()
+        for sch in schedulers:
+            sch.step()
 
         progress_bar(i, len(trainloader), "train")
 
