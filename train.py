@@ -70,17 +70,18 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, raw_features = net((images1, images2))
+        raw_logits, _, projected_features = net((images1, images2))
         raw_logits1, raw_logits2 = raw_logits
-        raw_features1, raw_features2 = raw_features
         raw_loss1 = creterion(raw_logits1, label)
         raw_loss2 = creterion(raw_logits2, label)
 
+        projected_features1, projected_features2 = projected_features
         # target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
-        # dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(raw_features1, raw_features2, target)
-        # dist_loss = torch.nn.L1Loss(reduction="mean")(raw_features1, raw_features2)
-        dist_loss = torch.nn.MSELoss(reduction="mean")(
-            raw_features1, raw_features2)
+        # dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features1, projected_features2, target)
+        # dist_loss = torch.nn.MSELoss(reduction="mean")(projected_features1, projected_features2)
+        # resnet50 224x224 lambda=1 project+L1Loss acc:
+        dist_loss = torch.nn.L1Loss(reduction="mean")(
+            projected_features1, projected_features2)
 
         total_loss = raw_loss1 + raw_loss2 + dist_loss
         total_loss.backward()
