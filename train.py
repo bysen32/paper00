@@ -10,6 +10,7 @@ from core.utils import init_log, progress_bar
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 start_epoch = 1
+best_acc = 0
 save_dir = os.path.join(save_dir, datetime.now().strftime("%Y%m%d_%H%M%S"))
 if os.path.exists(save_dir):
     raise NameError("model dir exists!")
@@ -77,9 +78,9 @@ for epoch in range(start_epoch, 500):
 
         # target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
         # dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(raw_features1, raw_features2, target)
-        dist_loss = torch.nn.L1Loss(reduction="mean")(
+        # dist_loss = torch.nn.L1Loss(reduction="mean")(raw_features1, raw_features2)
+        dist_loss = torch.nn.MSELoss(reduction="mean")(
             raw_features1, raw_features2)
-        # dist_loss = torch.nn.MSELoss(reduction="sum")(raw_features1, raw_features2)
 
         total_loss = raw_loss1 + raw_loss2 + dist_loss
         total_loss.backward()
@@ -138,9 +139,11 @@ for epoch in range(start_epoch, 500):
                 progress_bar(i, len(testloader), "eval test set")
 
         test_acc = float(test_correct) / total
+        if (best_acc < test_acc):
+            best_acc = test_acc
         test_loss = test_loss / total
-        _print("epoch:{} - test loss: {:.4f} and test acc: {:.3f} total sample: {}".format(
-            epoch, test_loss, test_acc, total))
+        _print("epoch:{} - test loss: {:.4f} and test acc: {:.3f}/{:.3f} total sample: {}".format(
+            epoch, test_loss, test_acc, best_acc, total))
 
         net_state_dict = net.module.state_dict()
         if not os.path.exists(save_dir):
