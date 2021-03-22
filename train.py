@@ -83,7 +83,7 @@ for epoch in range(start_epoch, 500):
         # dist_loss = torch.nn.MSELoss(reduction="mean")(projected_features1, projected_features2)
         # dist_loss = torch.nn.L1Loss(reduction="mean")(projected_features1, projected_features2)
 
-        total_loss = raw_loss1 + raw_loss2 + dist_loss
+        total_loss = raw_loss1 + raw_loss2 + 100 * dist_loss
         total_loss.backward()
 
         raw_optimizer.step()

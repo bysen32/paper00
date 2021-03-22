@@ -17,7 +17,7 @@ class MyNet(nn.Module):
             nn.Dropout(p=0.5),
             nn.Linear(512 * 4, 200)
         )
-        self.projector = projection_MLP(2048, 512)
+        self.projector = projection_MLP(2048, 1024)
 
     def forward(self, X, flag="train"):
         if flag == "train":
