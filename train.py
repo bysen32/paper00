@@ -41,7 +41,7 @@ if resume:
     ckpt = torch.load(resume)
     net.load_State_dict(ckpt["net_state_dict"])
     start_epoch = ckpt["epoch"] + 1
-creterion = torch.nn.CrossEntropyLoss().cuda()
+criterion = torch.nn.CrossEntropyLoss().cuda()
 
 # define optimizers
 raw_parameters = list(net.parameters())
@@ -53,8 +53,8 @@ schedulers = [
 ]
 
 # ----------------- pairs struct -----------------
-rank_criterion = nn.MarginRankLoss(margin=0.05)
-softmax_layer = nn.Softmax(dim=1).cuda()
+rank_criterion = torch.nn.MarginRankingLoss(margin=0.05)
+softmax_layer = torch.nn.Softmax(dim=1).cuda()
 
 net = net.cuda()
 net = DataParallel(net)
@@ -62,9 +62,10 @@ net = DataParallel(net)
 for epoch in range(start_epoch, 500):
 
     _print("--" * 50)
+    # _print("resnet50 model1: cossim model2 224x224 batchsize:30")
     net.train()
     for i, data in enumerate(trainloader):
-        imgs, label = data[0], data[1].cuda()
+        imgs, labels = data[0], data[1].cuda()
         images1, images2 = imgs
         images1 = images1.cuda()
         images2 = images2.cuda()
@@ -72,10 +73,10 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, projected_features, pairs_logits, pairs_labels = net((images1, images2))
+        raw_logits, _, projected_features, pairs_logits, pairs_labels = net((images1, images2), labels)
         raw_logits1, raw_logits2 = raw_logits
-        raw_loss1 = creterion(raw_logits1, label)
-        raw_loss2 = creterion(raw_logits2, label)
+        raw_loss1 = criterion(raw_logits1, labels)
+        raw_loss2 = criterion(raw_logits2, labels)
 
         projected_features1, projected_features2 = projected_features
         # resnet50 224x224 lambda=1 project+cosine_similarity acc:80.0%
@@ -85,28 +86,30 @@ for epoch in range(start_epoch, 500):
         # dist_loss = torch.nn.MSELoss(reduction="mean")(projected_features1, projected_features2)
         # dist_loss = torch.nn.L1Loss(reduction="mean")(projected_features1, projected_features2)
 
-        # ---------- pairs struct ---------------------
+        # ---------- pairs attention struct ---------------------
         logit1_self, logit1_other, logit2_self, logit2_other = pairs_logits
+        # ??? 翻倍了
+        batch_size = logit1_self.shape[0]
         labels1, labels2 = pairs_labels
         labels1 = labels1.cuda()
         labels2 = labels2.cuda()
-        self_logits = torch.zero(2*batch_size, 200).cuda()
-        other_logits = torch.zero(2*batch_size, 200).cuda()
-        self_logits[:batch_size] = logits1_self
-        self_logits[batch_size:] = logits2_self
+        self_logits = torch.zeros(2*batch_size, 200).cuda()
+        other_logits = torch.zeros(2*batch_size, 200).cuda()
+        self_logits[:batch_size] = logit1_self
+        self_logits[batch_size:] = logit2_self
         other_logits[:batch_size] = logit1_other
         other_logits[batch_size:] = logit2_other
 
-        logits = torch.cat([self.logits, other_logits], dim=0)
+        logits = torch.cat([self_logits, other_logits], dim=0)
         targets = torch.cat([labels1, labels2, labels1, labels2], dim=0)
-        softmax_loss = criterion(logitis, targets)
+        softmax_loss = criterion(logits, targets)
 
-        self_scores = softmax_layer(self_logits)[torch.arange(2*batch_size).cuda().long(), toch.cat([labels1, labels2], dim=0)]
+        self_scores = softmax_layer(self_logits)[torch.arange(2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
         other_scores = softmax_layer(other_logits)[torch.arange(2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
         flag = torch.ones([2*batch_size, ]).cuda()
         rank_loss = rank_criterion(self_scores, other_scores, flag)
 
-        total_loss = raw_loss1 + raw_loss2 + 100 * dist_loss + softmax_loss + rank_loss
+        total_loss = raw_loss1 + raw_loss2 + dist_loss + softmax_loss + rank_loss
         total_loss.backward()
 
         raw_optimizer.step()
@@ -123,22 +126,24 @@ for epoch in range(start_epoch, 500):
         net.eval()
         for i, data in enumerate(trainloader):
             with torch.no_grad():
-                imgs, label = data[0], data[1].cuda()
+                imgs, labels = data[0], data[1].cuda()
                 images1, images2 = imgs
                 images1 = images1.cuda()
                 images2 = images2.cuda()
                 batch_size = images1.size(0)
-                raw_logits, _, _ = net((images1, images2))
+
+                raw_logits, _, _, _, _ = net((images1, images2), labels)
                 raw_logits1, raw_logits2 = raw_logits
-                # caculate loss
-                raw_loss1 = creterion(raw_logits1, label)
-                raw_loss2 = creterion(raw_logits2, label)
+                # caculate class loss 
+                raw_loss1 = criterion(raw_logits1, labels)
+                raw_loss2 = criterion(raw_logits2, labels)
+
                 # caculate accuracy
                 _, raw_predict1 = torch.max(raw_logits1, 1)
                 _, raw_predict2 = torch.max(raw_logits2, 1)
                 total += batch_size * 2
-                train_correct1 += torch.sum(raw_predict1.data == label.data)
-                train_correct2 += torch.sum(raw_predict2.data == label.data)
+                train_correct1 += torch.sum(raw_predict1.data == labels.data)
+                train_correct2 += torch.sum(raw_predict2.data == labels.data)
                 train_loss += raw_loss1.item() * batch_size + raw_loss2.item() * batch_size
                 progress_bar(i, len(trainloader), "eval train set")
 
@@ -154,13 +159,17 @@ for epoch in range(start_epoch, 500):
         total = 0
         for i, data in enumerate(testloader):
             with torch.no_grad():
-                img, label = data[0].cuda(), data[1].cuda()
+                img, labels = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                raw_logits, _, _ = net(img, flag="test")
-                raw_loss = creterion(raw_logits, label)
+
+                raw_logits, _, _ = net(img, labels, flag="test")
+                # caculate class loss
+                raw_loss = criterion(raw_logits, labels)
+
+                # caculate accuracy
                 _, raw_predict = torch.max(raw_logits, 1)
                 total += batch_size
-                test_correct += torch.sum(raw_predict.data == label.data)
+                test_correct += torch.sum(raw_predict.data == labels.data)
                 test_loss += raw_loss.item() * batch_size
                 progress_bar(i, len(testloader), "eval test set")
 
@@ -175,7 +184,8 @@ for epoch in range(start_epoch, 500):
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
 
-        if not DEV_MODE:
+        # 暂时不保存模型
+        if False:
             torch.save(
                 {
                     "epoch": epoch,

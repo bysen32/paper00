@@ -20,12 +20,17 @@ class MyNet(nn.Module):
         self.projector = projection_MLP(2048, 512)
 
         # API-Net struct
+        self.fc = torch.nn.Sequential(
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(2048, 200)
+        )
+
         self.map1 = nn.Linear(2048 * 2, 512)
         self.map2 = nn.Linear(512, 2048)
         self.drop = nn.Dropout(p=0.5)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, X, flag="train"):
+    def forward(self, X, targets, flag="train"):
         if flag == "train":
             X1, X2 = X
             batch = X1.size(0)
@@ -56,14 +61,14 @@ class MyNet(nn.Module):
 
             features1_self = torch.mul(gate1, features1) + features1
             features1_other = torch.mul(gate2, features1) + features1
-            featreus2_self = torch.mul(gate2, features2) + features2
-            features2_other = toch.mul(gate1, features2) + features2
+            features2_self = torch.mul(gate2, features2) + features2
+            features2_other = torch.mul(gate1, features2) + features2
 
             logit1_self = self.fc(self.drop(features1_self))
             logit1_other = self.fc(self.drop(features1_other))
             logit2_self = self.fc(self.drop(features2_self))
             logit2_other = self.fc(self.drop(features2_other))
-            pairs_logits = (logits1_self, logit1_other, logit2_self, logit2_other)
+            pairs_logits = (logit1_self, logit1_other, logit2_self, logit2_other)
             pairs_labels = (labels1, labels2)
 
             return (resnet_out1, resnet_out2), _, (projected_features1, projected_features2), pairs_logits, pairs_labels
@@ -84,6 +89,47 @@ class MyNet(nn.Module):
             scipy.misc.imsave(str(index + 1) + ".png", feature_map[index])
         plt.show()
 
+    def get_pairs(self, embeddings, labels):
+        distance_matrix = pdist(embeddings).detach().cpu().numpy()
+
+        labels = labels.detach().cpu().numpy().reshape(-1, 1)
+        num = labels.shape[0]
+        dia_inds = np.diag_indices(num)
+        lb_eqs = (labels == labels.T)
+        lb_eqs[dia_inds] = False
+        dist_same = distance_matrix.copy()
+        dist_same[lb_eqs == False] = np.inf
+        intra_idxs = np.argmin(dist_same, axis=1)
+
+        dist_diff = distance_matrix.copy()
+        lb_eqs[dia_inds] = True
+        dist_diff[lb_eqs == True] = np.inf
+        inter_idxs = np.argmin(dist_diff, axis=1)
+
+        intra_pairs = np.zeros([embeddings.shape[0], 2])
+        inter_pairs = np.zeros([embeddings.shape[0], 2])
+        intra_labels = np.zeros([embeddings.shape[0], 2])
+        inter_labels = np.zeros([embeddings.shape[0], 2])
+
+        for i in range(embeddings.shape[0]):
+            intra_labels[i, 0] = labels[i]
+            intra_labels[i, 1] = labels[intra_idxs[i]]
+
+            intra_pairs[i, 0] = i
+            intra_pairs[i, 1] = intra_idxs[i]
+
+            inter_labels[i, 0] = labels[i]
+            inter_labels[i, 1] = labels[inter_idxs[i]]
+
+            inter_pairs[i, 0] = i
+            inter_pairs[i, 1] = inter_idxs[i]
+
+        intra_labels = torch.from_numpy(intra_labels).long().cuda()
+        intra_pairs = torch.from_numpy(intra_pairs).long().cuda()
+        inter_labels = torch.from_numpy(inter_labels).long().cuda()
+        inter_pairs = torch.from_numpy(inter_pairs).long().cuda()
+
+        return intra_pairs, inter_pairs, intra_labels, inter_labels
 
 class projection_MLP(nn.Module):
     def __init__(self, in_dim, out_dim=256):
@@ -106,45 +152,3 @@ def pdist(vectors):
         2).sum(dim=1).view(1, -1) + vectors.pow(2).sum(dim=1).view(-1, 1)
     return distance_matrix
 
-
-def get_pairs(embeddings, labels):
-    distance_matrix = pdist(embeddings).detach().cpu().numpy()
-
-    labels = labels.detach().cpu().numpy().reshape(-1, 1)
-    num = labels.shape[0]
-    dia_inds = np.diag_indices(num)
-    lb_eqs = (labels == labels.T)
-    lb_eqs[dia_inds] = False
-    dist_same = distance_matrix.copy()
-    dist_same[lb_eqs == False] = np.inf
-    intra_idxs = np.argmin(dist_same, axis=1)
-
-    dist_diff = distance_matrix.copy()
-    lb_eqs[dia_inds] = True
-    dist_diff[lb_eqs == True] = np.inf
-    inter_idxs = np.argmin(dist_diff, axis=1)
-
-    intra_pairs = np.zeros([embeddings.shape[0], 2])
-    inter_pairs = np.zeros([embeddings.shape[0], 2])
-    intra_labels = np.zeros([embeddings.shape[0], 2])
-    inter_labels = np.zeros([embeddings.shape[0], 2])
-
-    for i in range(embeddings.shape[0]):
-        intra_labels[i, 0] = labels[i]
-        intra_labels[i, 1] = labels[intra_idxs[i]]
-
-        intra_pairs[i, 0] = i
-        intra_pairs[i, 1] = intra_idxs[i]
-
-        inter_labels[i, 0] = labels[i]
-        inter_labels[i, 1] = labels[inter_idxs[i]]
-
-        inter_pairs[i, 0] = i
-        inter_pairs[i, 1] = inter_idxs[i]
-
-    intra_labels = torch.from_numpy(intra_labels).long().to(device)
-    intra_pairs = torch.from_numpy(intra_pairs).long().to(device)
-    inter_labels = torch.from_numpy(inter_labels).long().to(device)
-    inter_pairs = torch.from_numpy(inter_pairs).long().to(device)
-
-    return intra_pairs, inter_pairs, intra_labels, inter_labels
