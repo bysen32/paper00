@@ -11,7 +11,8 @@
 | resnet50 + model1:cosine_similarity | 256x256(224x224) | 40         | 80.1%     | 90    | full    | 3.21 |        |
 | resnet50 + model1:L1Loss            | 256x256(224x224) | 40         | 79.1%     | 100   | full    | 3.22 |        |
 | resnet50 + model1:MSELoss           | 256x256(224x224) | 40         | 78.7%     | 90    | full    | 3.22 |        |
-| resnet50 + model1:project+cosine    | 256x256(224x224) | 40         | --        | --    | full    | 3.22 |        |
+| resnet50 + model1:project+cosine    | 256x256(224x224) | 40         | 80.0%     | 90    | full    | 3.22 |        |
+| resnet50 + model1:project+100*cosine| 256x256(224x224) | 40         | 81.0%     | 200   | full    | 3.23 |        |
 | resnet50 + model1:project+L1Loss    | 256x256(224x224) | 40         | 79.5%     | 50    | full    | 3.22 |        |
 | resnet50 + model1:project+MSE       | 256x256(224x224) | 40         | --        | --    | full    | 3.22 |        |
 
