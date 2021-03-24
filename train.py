@@ -4,7 +4,7 @@ import torch.utils.data
 from torch.nn import DataParallel
 from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR
-from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE
+from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD
 from core import model, dataset, resnet
 from core.utils import init_log, progress_bar
 
@@ -15,12 +15,10 @@ save_dir = os.path.join(save_dir, datetime.now().strftime("%Y%m%d_%H%M%S"))
 if os.path.exists(save_dir):
     raise NameError("model dir exists!")
 
-if DEV_MODE:
-    _print = print
-else:
-    os.makedirs(save_dir)
-    logging = init_log(save_dir)
-    _print = logging.info
+os.makedirs(save_dir)
+logging = init_log(save_dir)
+_print = logging.info
+
 
 # read dataset
 # trainset = dataset.CUB(root="./CUB_200_2011", is_train=True, data_len=None)
@@ -37,10 +35,12 @@ net = model.MyNet()
 # net.fc = torch.nn.Linear(512 * 4, 200)
 
 # load saved model
-if resume:
+if resume and os.path.isfile(resume):
     ckpt = torch.load(resume)
-    net.load_State_dict(ckpt["net_state_dict"])
+    net.load_state_dict(ckpt["net_state_dict"])
     start_epoch = ckpt["epoch"] + 1
+    _print("Load {}".format(resume))
+
 criterion = torch.nn.CrossEntropyLoss().cuda()
 
 # define optimizers
@@ -58,6 +58,8 @@ softmax_layer = torch.nn.Softmax(dim=1).cuda()
 
 net = net.cuda()
 net = DataParallel(net)
+
+_print("-"*10+VERSION_HEAD+"-"*10)
 
 for epoch in range(start_epoch, 500):
 
@@ -109,7 +111,11 @@ for epoch in range(start_epoch, 500):
         flag = torch.ones([2*batch_size, ]).cuda()
         rank_loss = rank_criterion(self_scores, other_scores, flag)
 
-        total_loss = raw_loss1 + raw_loss2 + dist_loss + softmax_loss + rank_loss
+        total_loss = raw_loss1 + raw_loss2
+        if epoch > 20:
+            total_loss += dist_loss
+        if epoch > 50:
+            total_loss += softmax_loss + rank_loss
         total_loss.backward()
 
         raw_optimizer.step()
@@ -185,17 +191,16 @@ for epoch in range(start_epoch, 500):
             os.mkdir(save_dir)
 
         # 暂时不保存模型
-        if False:
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "train_loss": train_loss,
-                    "train_acc": train_acc,
-                    "test_loss": test_loss,
-                    "test_acc": test_acc,
-                    "net_state_dict": net_state_dict,
-                },
-                os.path.join(save_dir, "%03d.ckpt" % epoch),
-            )
+        torch.save(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "train_acc": train_acc,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+                "net_state_dict": net_state_dict,
+            },
+            "checkpoint.ckpt"
+        )
 
 print("finishing training")

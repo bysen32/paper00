@@ -1,9 +1,10 @@
 BATCH_SIZE = 20
 LR = 0.001
 WD = 1e-4
-SAVE_FREQ = 1
+SAVE_FREQ = 10
 INPUT_SIZE = (224, 224)
-resume = ""
+resume = "checkpoint.ckpt"
 test_model = "model.ckpt"
 save_dir = "./save/"
 DEV_MODE = False
+VERSION_HEAD = "resnet50 model1 + model2 quick version"
