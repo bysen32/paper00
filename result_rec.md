@@ -15,6 +15,7 @@
 | resnet50 + model1:project+100*cosine| 256x256(224x224) | 40         | 81.0%     | 200   | full    | 3.23 |        |
 | resnet50 + model1:project+L1Loss    | 256x256(224x224) | 40         | 79.5%     | 50    | full    | 3.22 |        |
 | resnet50 + model1:project+MSE       | 256x256(224x224) | 40         | --        | --    | full    | 3.22 |        |
+| resnet50 + model1:p+c + model2      | 256x256(224x224) | 20         | 77.7%     | 500   | full    | 3.24 |        |
 
 - experiments result on part dataset
 
