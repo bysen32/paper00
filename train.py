@@ -80,11 +80,12 @@ for epoch in range(start_epoch, 500):
         feature_loss = criterion(features, labels)
 
         target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
-        intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
-        inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+        # intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
+        # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+        dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
-        total_loss = raw_loss + feature_loss + intra_dist_loss + inter_dist_loss
+        total_loss = raw_loss + feature_loss + dist_loss
         total_loss.backward()
 
         raw_optimizer.step()
@@ -111,15 +112,16 @@ for epoch in range(start_epoch, 500):
                 features_loss = criterion(features, labels)
 
                 target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
-                intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
-                inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+                # intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
+                # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+                dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
 
                 # caculate accuracy
                 _, raw_predict = torch.max(raw_logits, 1)
                 total += batch_size * 2
 
                 train_correct += torch.sum(raw_predict.data == torch.cat([labels, labels], dim=0).data)
-                train_loss += raw_loss + features_loss + intra_dist_loss + inter_dist_loss
+                train_loss += raw_loss + features_loss + dist_loss
                 progress_bar(i, len(trainloader), "eval train set")
 
         train_acc = float(train_correct) / total
