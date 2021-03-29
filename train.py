@@ -4,7 +4,7 @@ import torch.utils.data
 from torch.nn import DataParallel
 from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR
-from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD
+from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES
 from core import model, dataset, resnet
 from core.utils import init_log, progress_bar
 
@@ -22,12 +22,16 @@ _print = logging.info
 
 # read dataset
 # trainset = dataset.CUB(root="./CUB_200_2011", is_train=True, data_len=None)
-trainset = dataset.CUB_Train(root="./CUB_200_2011")
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, drop_last=False)
+# trainset = dataset.CUB_Train(root="./CUB_200_2011")
+trainset = dataset.BatchDataset(root="./CUB_200_2011")
+train_sampler = dataset.BalancedBatchSampler(trainset, N_CLASSES, N_SAMPLES)
+trainloader = torch.utils.data.DataLoader(
+    trainset, batch_sampler=train_sampler, num_workers=8, pin_memory=True)
 
 # testset = dataset.CUB(root="./CUB_200_2011", is_train=False, data_len=None)
 testset = dataset.CUB_Test(root="./CUB_200_2011")
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=8, drop_last=False)
+testloader = torch.utils.data.DataLoader(
+    testset, batch_size=100, shuffle=False, num_workers=8, drop_last=False)
 
 # define model
 net = model.MyNet()
@@ -66,8 +70,8 @@ for epoch in range(start_epoch, 500):
     _print("--" * 50)
     # _print("resnet50 model1: cossim model2 224x224 batchsize:30")
     net.train()
-    for i, data in enumerate(trainloader):
-        imgs, labels = data[0], data[1].cuda()
+    for i, (input, target) in enumerate(trainloader):
+        imgs, labels = input, target.cuda()
         images1, images2 = imgs
         images1 = images1.cuda()
         images2 = images2.cuda()
@@ -75,17 +79,20 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, projected_features, features, inter_pairs = net((images1, images2), labels)
+        raw_logits, _, raw_features, intra_pairs, inter_pairs = net(
+            (images1, images2), labels)
         raw_loss = criterion(raw_logits, torch.cat([labels, labels], dim=0))
-        feature_loss = criterion(features, labels)
+        # feature_loss = criterion(features, labels)
 
         target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
-        # intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
+        intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
+            raw_features[:batch_size], raw_features[batch_size:], target)
         # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
-        dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
+        dist_loss = torch.nn.TripletMarginLoss()(
+            raw_features[:batch_size], raw_features[batch_size:], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
-        total_loss = raw_loss + feature_loss + dist_loss
+        total_loss = raw_loss + dist_loss + intra_dist_loss
         total_loss.backward()
 
         raw_optimizer.step()
@@ -94,7 +101,10 @@ for epoch in range(start_epoch, 500):
         progress_bar(i, len(trainloader), "train")
 
     if epoch % SAVE_FREQ == 0:
-        train_loss = 0
+        raw_loss_total = 0
+        features_loss_total = 0
+        dist_loss_total = 0
+        intra_dist_loss_total = 0
         train_correct = 0
         total = 0
         net.eval()
@@ -106,29 +116,40 @@ for epoch in range(start_epoch, 500):
                 images2 = images2.cuda()
                 batch_size = images1.size(0)
 
-                raw_logits, _, projected_features, features, inter_pairs = net((images1, images2), labels)
-                # caculate class loss 
-                raw_loss = criterion(raw_logits, torch.cat([labels, labels], dim=0))
-                features_loss = criterion(features, labels)
+                raw_logits, _, raw_features, intra_pairs, inter_pairs = net(
+                    (images1, images2), labels)
+                # caculate class loss
+                raw_loss = criterion(
+                    raw_logits, torch.cat([labels, labels], dim=0))
+                # features_loss = criterion(features, labels)
 
-                target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
-                # intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
+                target = torch.autograd.Variable(
+                    torch.ones(batch_size, 1)).cuda()
+                intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
+                    raw_features[:batch_size], raw_features[batch_size:], target)
                 # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
-                dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
+                dist_loss = torch.nn.TripletMarginLoss()(
+                    raw_features[:batch_size], raw_features[batch_size:], inter_pairs[1])
 
                 # caculate accuracy
                 _, raw_predict = torch.max(raw_logits, 1)
                 total += batch_size * 2
 
-                train_correct += torch.sum(raw_predict.data == torch.cat([labels, labels], dim=0).data)
-                train_loss += raw_loss + features_loss + dist_loss
+                train_correct += torch.sum(raw_predict.data ==
+                                           torch.cat([labels, labels], dim=0).data)
+                raw_loss_total += raw_loss
+
+                # features_loss_total += features_loss
+                dist_loss_total += dist_loss
+                intra_dist_loss_total += intra_dist_loss
                 progress_bar(i, len(trainloader), "eval train set")
 
         train_acc = float(train_correct) / total
-        train_loss = train_loss / total
+        train_loss = (raw_loss_total + dist_loss_total +
+                      intra_dist_loss_total) / total
 
-        _print("epoch:{} - train loss: {:.3f} and train acc: {:.3f} total sample: {}".format(
-            epoch, train_loss, train_acc, total))
+        _print("epoch:{} - train loss: {:.3f} raw_loss: {:.3f} dist_loss: {:.3f} intra_loss: {:.3f} and train acc: {:.3f} total sample: {}".format(
+            epoch, train_loss, raw_loss_total/total, dist_loss_total/total, intra_dist_loss_total/total, train_acc, total))
 
         # evaluate on test set
         test_loss = 0

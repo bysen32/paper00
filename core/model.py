@@ -40,13 +40,16 @@ class MyNet(nn.Module):
 
             # 取平均
             features = torch.lerp(raw_features[:batch], raw_features[batch:], 0.5)
+            # features = raw_features[:batch]
             # cpu
             intra_pairs, inter_pairs, intra_labels, inter_labels = self.get_pairs(features, targets)
+            # inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
             inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
+            intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
             # Triplet
             # RankLoss
 
-            return raw_logits, _, raw_features, features, inter_pairs_feature
+            return raw_logits, _, raw_features, intra_pairs_feature, inter_pairs_feature
         else:
             batch = X.size(0)
             return self.pretrained_model(X)
