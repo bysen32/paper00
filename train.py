@@ -3,7 +3,7 @@ import sys
 import torch.utils.data
 from torch.nn import DataParallel
 from datetime import datetime
-from torch.optim.lr_scheduler import MultiStepLR
+from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES
 from core import model, dataset, resnet
 from core.utils import init_log, progress_bar
@@ -53,7 +53,8 @@ raw_optimizer = torch.optim.SGD(
     raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 
 schedulers = [
-    MultiStepLR(raw_optimizer, milestones=[20, 40, 60], gamma=0.1),
+    MultiStepLR(raw_optimizer, milestones=[10, 50], gamma=0.1),
+    # CosineAnnealingLR(raw_optimizer, 100 * len(trainloader))
 ]
 
 # ----------------- pairs struct -----------------
@@ -97,10 +98,10 @@ for epoch in range(start_epoch, 500):
         total_loss.backward()
 
         raw_optimizer.step()
-        progress_bar(i, len(trainloader), "train")
+        for sch in schedulers:
+            sch.step()
 
-    for sch in schedulers:
-        sch.step()
+        progress_bar(i, len(trainloader), "train")
 
     if epoch % SAVE_FREQ == 0:
         raw_loss_total = 0

@@ -7,7 +7,7 @@ resume = ""
 # resume = "checkpoint.ckpt"
 test_model = "model.ckpt"
 save_dir = "./save/"
-DEV_MODE = True
+DEV_MODE = False
 VERSION_HEAD = "resnet50 model1 + model2 intra_class"
 
 N_CLASSES = 13
