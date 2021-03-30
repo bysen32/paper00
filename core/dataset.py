@@ -228,13 +228,14 @@ class BalancedBatchSampler(BatchSampler):
     def __iter__(self):
         self.count = 0
         while self.count + self.batch_size < len(self.dataset):
-            # classes = np.random.choice(self.labels_set, self.n_classes, replace=False)
-            classes = np.random.choice(self.labels_set, self.n_classes)
+            classes = np.random.choice(
+                self.labels_set, self.n_classes, replace=False)
+            # classes = np.random.choice(self.labels_set, self.n_classes)
             indices = []
             for class_ in classes:
-                indices.extend(self.label_to_indices[class_][
-                               self.used_label_indices_count[class_]:self.used_label_indices_count[
-                                   class_] + self.n_samples])
+                cur = self.used_label_indices_count[class_]
+                indices.extend(
+                    self.label_to_indices[class_][cur:cur+self.n_samples])
                 self.used_label_indices_count[class_] += self.n_samples
                 if self.used_label_indices_count[class_] + self.n_samples > len(self.label_to_indices[class_]):
                     np.random.shuffle(self.label_to_indices[class_])

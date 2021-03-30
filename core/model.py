@@ -36,7 +36,7 @@ class MyNet(nn.Module):
 
             # resnet_out, rpn_feature, feature = self.pretrained_model(x)
             raw_logits, _, raw_features = self.pretrained_model(images)
-            # projected_features = self.projector(raw_features)
+            projected_features = self.projector(raw_features)
 
             # 取平均
             features = torch.lerp(raw_features[:batch], raw_features[batch:], 0.5)
@@ -49,7 +49,7 @@ class MyNet(nn.Module):
             # Triplet
             # RankLoss
 
-            return raw_logits, _, raw_features, intra_pairs_feature, inter_pairs_feature
+            return raw_logits, _, raw_features, projected_features, intra_pairs_feature, inter_pairs_feature
         else:
             batch = X.size(0)
             return self.pretrained_model(X)

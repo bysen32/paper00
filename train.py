@@ -53,7 +53,7 @@ raw_optimizer = torch.optim.SGD(
     raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 
 schedulers = [
-    MultiStepLR(raw_optimizer, milestones=[60, 100], gamma=0.1),
+    MultiStepLR(raw_optimizer, milestones=[20, 40, 60], gamma=0.1),
 ]
 
 # ----------------- pairs struct -----------------
@@ -79,32 +79,35 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, raw_features, intra_pairs, inter_pairs = net(
+        raw_logits, _, raw_features, projected_features, intra_pairs, inter_pairs = net(
             (images1, images2), labels)
         raw_loss = criterion(raw_logits, torch.cat([labels, labels], dim=0))
         # feature_loss = criterion(features, labels)
 
         target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
         intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
-            raw_features[:batch_size], raw_features[batch_size:], target)
-        # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+            projected_features[:batch_size], projected_features[batch_size:], target)
+        inter_dist_loss = torch.nn.CosineEmbeddingLoss(
+            reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
         dist_loss = torch.nn.TripletMarginLoss()(
-            raw_features[:batch_size], raw_features[batch_size:], inter_pairs[1])
+            intra_pairs[0], intra_pairs[1], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
         total_loss = raw_loss + dist_loss + intra_dist_loss
         total_loss.backward()
 
         raw_optimizer.step()
-        for sch in schedulers:
-            sch.step()
         progress_bar(i, len(trainloader), "train")
+
+    for sch in schedulers:
+        sch.step()
 
     if epoch % SAVE_FREQ == 0:
         raw_loss_total = 0
         features_loss_total = 0
         dist_loss_total = 0
         intra_dist_loss_total = 0
+        inter_dist_loss_total = 0
         train_correct = 0
         total = 0
         net.eval()
@@ -116,7 +119,7 @@ for epoch in range(start_epoch, 500):
                 images2 = images2.cuda()
                 batch_size = images1.size(0)
 
-                raw_logits, _, raw_features, intra_pairs, inter_pairs = net(
+                raw_logits, _, raw_features, projected_features, intra_pairs, inter_pairs = net(
                     (images1, images2), labels)
                 # caculate class loss
                 raw_loss = criterion(
@@ -126,10 +129,11 @@ for epoch in range(start_epoch, 500):
                 target = torch.autograd.Variable(
                     torch.ones(batch_size, 1)).cuda()
                 intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
-                    raw_features[:batch_size], raw_features[batch_size:], target)
-                # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+                    projected_features[:batch_size], projected_features[batch_size:], target)
+                inter_dist_loss = torch.nn.CosineEmbeddingLoss(
+                    reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
                 dist_loss = torch.nn.TripletMarginLoss()(
-                    raw_features[:batch_size], raw_features[batch_size:], inter_pairs[1])
+                    intra_pairs[0], intra_pairs[1], inter_pairs[1])
 
                 # caculate accuracy
                 _, raw_predict = torch.max(raw_logits, 1)
