@@ -58,16 +58,37 @@ def progress_bar(current, total, msg=None):
     sys.stdout.flush()
 
 
+class AverageMeter(object):
+    """
+    Keeps track of most recent, average, sum, and count of a metric.
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+
 def format_time(seconds):
-    days        = int(seconds / 3600 / 24)
-    seconds     = seconds - days * 3600 * 24
-    hours       = int(seconds / 3600)
-    seconds     = seconds - hours * 3600
-    minutes     = int(seconds / 60)
-    seconds     = seconds - minutes * 60
-    secondsf    = int(seconds)
-    seconds     = seconds - secondsf
-    millis      = int(seconds * 1000)
+    days = int(seconds / 3600 / 24)
+    seconds = seconds - days * 3600 * 24
+    hours = int(seconds / 3600)
+    seconds = seconds - hours * 3600
+    minutes = int(seconds / 60)
+    seconds = seconds - minutes * 60
+    secondsf = int(seconds)
+    seconds = seconds - secondsf
+    millis = int(seconds * 1000)
 
     f = ""
     i = 1
@@ -93,7 +114,8 @@ def format_time(seconds):
 
 
 def init_log(output_dir):
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(message)s", datefmt="%Y%m%d-%H:%M:%S", filename=os.path.join(output_dir, "log.log"), filemode="w",)
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(message)s",
+                        datefmt="%Y%m%d-%H:%M:%S", filename=os.path.join(output_dir, "log.log"), filemode="w",)
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     logging.getLogger("").addHandler(console)

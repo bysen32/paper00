@@ -6,7 +6,7 @@ from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES
 from core import model, dataset, resnet
-from core.utils import init_log, progress_bar
+from core.utils import init_log, progress_bar, AverageMeter
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 start_epoch = 1
@@ -88,8 +88,8 @@ for epoch in range(start_epoch, 500):
         target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
         intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
             projected_features[:batch_size], projected_features[batch_size:], target)
-        inter_dist_loss = torch.nn.CosineEmbeddingLoss(
-            reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+        # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
+        inter_dist_loss = 0
         dist_loss = torch.nn.TripletMarginLoss()(
             intra_pairs[0], intra_pairs[1], inter_pairs[1])
 
@@ -98,17 +98,18 @@ for epoch in range(start_epoch, 500):
         total_loss.backward()
 
         raw_optimizer.step()
-        for sch in schedulers:
-            sch.step()
 
         progress_bar(i, len(trainloader), "train")
 
+    for sch in schedulers:
+        sch.step()
+
     if epoch % SAVE_FREQ == 0:
-        raw_loss_total = 0
+        raw_losses = AverageMeter()
         features_loss_total = 0
-        dist_loss_total = 0
-        intra_dist_loss_total = 0
-        inter_dist_loss_total = 0
+        dist_losses = AverageMeter()
+        intra_dist_losses = AverageMeter()
+        inter_dist_losses = AverageMeter()
         train_correct = 0
         total = 0
         net.eval()
@@ -132,7 +133,7 @@ for epoch in range(start_epoch, 500):
                 intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
                     projected_features[:batch_size], projected_features[batch_size:], target)
                 inter_dist_loss = torch.nn.CosineEmbeddingLoss(
-                    reduction="mean")(inter_pairs[0], inter_pairs[1], target-1)
+                    reduction="mean")(inter_pairs[0], inter_pairs[1], target)
                 dist_loss = torch.nn.TripletMarginLoss()(
                     intra_pairs[0], intra_pairs[1], inter_pairs[1])
 
@@ -142,19 +143,21 @@ for epoch in range(start_epoch, 500):
 
                 train_correct += torch.sum(raw_predict.data ==
                                            torch.cat([labels, labels], dim=0).data)
-                raw_loss_total += raw_loss
-
                 # features_loss_total += features_loss
-                dist_loss_total += dist_loss
-                intra_dist_loss_total += intra_dist_loss
+                raw_losses.update(raw_loss.item(), batch_size)
+                dist_losses.update(dist_loss.item(), batch_size)
+                intra_dist_losses.update(intra_dist_loss.item(), batch_size)
+                inter_dist_losses.update(inter_dist_loss.item(), batch_size)
                 progress_bar(i, len(trainloader), "eval train set")
 
         train_acc = float(train_correct) / total
-        train_loss = (raw_loss_total + dist_loss_total +
-                      intra_dist_loss_total) / total
+        train_loss = (raw_losses.avg + dist_losses.avg +
+                      intra_dist_losses.avg + inter_dist_losses.avg)
 
-        _print("epoch:{} - train loss: {:.3f} raw_loss: {:.3f} dist_loss: {:.3f} intra_loss: {:.3f} and train acc: {:.3f} total sample: {}".format(
-            epoch, train_loss, raw_loss_total/total, dist_loss_total/total, intra_dist_loss_total/total, train_acc, total))
+        _print("epoch:{} - train loss: {:.3f} raw_loss: {:.3f} dist_loss: {:.3f} intra_loss: {:.3f} inter_loss: {:.3f}".format(
+            epoch, train_loss, raw_losses.avg, dist_losses.avg, intra_dist_losses.avg, inter_dist_losses.avg))
+        _print("train acc: {:.3f} total sample: {}".format(
+            train_acc, total))
 
         # evaluate on test set
         test_loss = 0
@@ -180,8 +183,10 @@ for epoch in range(start_epoch, 500):
         if (best_acc < test_acc):
             best_acc = test_acc
         test_loss = test_loss / total
-        _print("epoch:{} - test loss: {:.4f} and test acc: {:.3f}/{:.3f} total sample: {}".format(
-            epoch, test_loss, test_acc, best_acc, total))
+        _print("epoch:{} - test loss: {:.4f}".format(epoch, test_loss))
+
+        _print(
+            "test acc: {:.3f}/{:.3f} total sample: {}".format(test_acc, best_acc, total))
 
         net_state_dict = net.module.state_dict()
         if not os.path.exists(save_dir):
