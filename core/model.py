@@ -24,9 +24,9 @@ class MyNet(nn.Module):
         #     torch.nn.Dropout(p=0.5),
         #     torch.nn.Linear(2048, 200)
         # )
-        # self.map1 = nn.Linear(2048, 512)
-        # self.map2 = nn.Linear(512, 2048)
-        # self.drop = nn.Dropout(p=0.5)
+        self.map1 = nn.Linear(2048*2, 512)
+        self.map2 = nn.Linear(512, 2048)
+        self.drop = nn.Dropout(p=0.5)
         # self.sigmoid = nn.Sigmoid()
 
     def forward(self, X, targets, flag="train"):
@@ -42,11 +42,14 @@ class MyNet(nn.Module):
             # projected_features = self.map2(map1_out)
             projected_features = self.projector(raw_features)
 
-            # 取平均
-            features = torch.lerp(
-                projected_features[:batch], projected_features[batch:], 0.5)
+            # 融合
+            # features = torch.lerp(projected_features[:batch], projected_features[batch:], 0.5)
             # features = raw_features[:batch]
-            # cpu
+            map1_out = self.map1(
+                torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
+            map1_out = self.drop(map1_out)
+            features = self.map2(map1_out)
+
             intra_pairs, inter_pairs, intra_labels, inter_labels = self.get_pairs(
                 features, targets)
             inter_pairs_feature = features[inter_pairs[:, 0]
