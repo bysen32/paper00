@@ -58,8 +58,8 @@ schedulers = [
 ]
 
 # ----------------- pairs struct -----------------
-rank_criterion = torch.nn.MarginRankingLoss(margin=0.05)
-softmax_layer = torch.nn.Softmax(dim=1).cuda()
+# rank_criterion = torch.nn.MarginRankingLoss(margin=0.05)
+# softmax_layer = torch.nn.Softmax(dim=1).cuda()
 
 net = net.cuda()
 net = DataParallel(net)
@@ -86,14 +86,14 @@ for epoch in range(start_epoch, 500):
         # feature_loss = criterion(features, labels)
 
         target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
+        # intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
         intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
             projected_features[:batch_size], projected_features[batch_size:], target)
         # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
-        flag = torch.ones(batch_size, 1).cuda()
-        inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
-            inter_pairs[0], inter_pairs[1], flag)
-        dist_loss = torch.nn.TripletMarginLoss()(
-            intra_pairs[0], intra_pairs[1], inter_pairs[1])
+        # flag = torch.ones(batch_size, 1).cuda()
+        # inter_dist_loss = torch.nn.MarginRankingLoss(margin = 0.05)(inter_pairs[0], inter_pairs[1], flag)
+        # dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
+        dist_loss = 0
 
         # ---------- pairs attention struct ---------------------
         total_loss = raw_loss + dist_loss + intra_dist_loss
@@ -135,11 +135,11 @@ for epoch in range(start_epoch, 500):
                 intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
                     projected_features[:batch_size], projected_features[batch_size:], target)
                 # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
-                flag = torch.ones(batch_size, 1).cuda()
-                inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
-                    inter_pairs[0], inter_pairs[1], flag)
-                dist_loss = torch.nn.TripletMarginLoss()(
-                    intra_pairs[0], intra_pairs[1], inter_pairs[1])
+                # flag = torch.ones(batch_size, 1).cuda()
+                # inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
+                #   inter_pairs[0], inter_pairs[1], flag)
+                # dist_loss = torch.nn.TripletMarginLoss()(intra_pairs[0], intra_pairs[1], inter_pairs[1])
+                # dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
 
                 # visible.plot_embedding(
                 #    raw_features, torch.cat([labels, labels], dim=0), "raw_feature")
@@ -152,9 +152,9 @@ for epoch in range(start_epoch, 500):
                                            torch.cat([labels, labels], dim=0).data)
                 # features_loss_total += features_loss
                 raw_losses.update(raw_loss.item(), batch_size)
-                dist_losses.update(dist_loss.item(), batch_size)
+                # dist_losses.update(dist_loss.item(), batch_size)
                 intra_dist_losses.update(intra_dist_loss.item(), batch_size)
-                inter_dist_losses.update(inter_dist_loss.item(), batch_size)
+                # inter_dist_losses.update(inter_dist_loss.item(), batch_size)
                 progress_bar(i, len(trainloader), "eval train set")
 
         train_acc = float(train_correct) / total

@@ -28,8 +28,12 @@
 
 - experiments on C20
 
-| model                               | image_size       | batch_size | accuracy | epoch | dataset | date | id  |
-| ----------------------------------- | ---------------- | ---------- | -------- | ----- | ------- | ---- | --- |
-| resnet50                            | 256x256(224x224) | 80         | 91.1%    | 40    | C20     | 3.31 |     |
-| resnet50 + model1:cosine_similarity | 256x256(224x224) | 40         | 90.7%    | 40    | C20     | 3.31 |     |
-| resnet50 + model1:inter+intra_dist  | 256x256(224x224) | 20         | 90.2%    | 100   | part    | 3.29 |     |
+| model                                                | image_size       | batch_size | accuracy | epoch | dataset | date | id  |
+| ---------------------------------------------------- | ---------------- | ---------- | -------- | ----- | ------- | ---- | --- |
+| resnet50                                             | 256x256(224x224) | 80         | 91.5%    | 40    | C20     | 3.31 |     |
+| resnet50 + intra:raw_feature                         | 256x256(224x224) | 40         | 90.7%    | 40    | C20     | 3.31 |     |
+| resnet50 + intra:pp(2048-512-2048)                   | 256x256(224x224) | 20         | 92.4%    | 40    | C20     | 3.31 |     |
+| resnet50 + intra:pp(2048-512)                        | 256x256(224x224) | 20         | 92.4%    | 40    | C20     | 3.31 |     |
+| resnet50 + intra:pp(2048-512) drop=0.5               | 256x256(224x224) | 20         | 91.8%    | 40    | C20     | 3.31 |     |
+| resnet50 + intra:raw_feature inter:raw_feature       | 256x256(224x224) | 20         | 83.3%    | 60    | C20     | 3.31 |     |
+| resnet50 + intra:projected_features(512) triplet:rrr | 256x256(224x224) | 20         | 85.0%    | 60    | C20     | 3.31 |     |

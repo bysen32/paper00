@@ -15,7 +15,7 @@ class MyNet(nn.Module):
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
         self.pretrained_model.fc = nn.Sequential(
             nn.Dropout(p=0.5),
-            nn.Linear(512 * 4, 200)
+            nn.Linear(2048, 200)
         )
         self.projector = projection_MLP(2048, 512)
 
@@ -24,7 +24,7 @@ class MyNet(nn.Module):
         #     torch.nn.Dropout(p=0.5),
         #     torch.nn.Linear(2048, 200)
         # )
-        # self.map1 = nn.Linear(2048 * 2, 512)
+        # self.map1 = nn.Linear(2048, 512)
         # self.map2 = nn.Linear(512, 2048)
         # self.drop = nn.Dropout(p=0.5)
         # self.sigmoid = nn.Sigmoid()
@@ -36,16 +36,23 @@ class MyNet(nn.Module):
 
             # resnet_out, rpn_feature, feature = self.pretrained_model(x)
             raw_logits, _, raw_features = self.pretrained_model(images)
+
+            # map1_out = self.map1(raw_features)
+            # map1_out = self.drop(map1_out)
+            # projected_features = self.map2(map1_out)
             projected_features = self.projector(raw_features)
 
             # 取平均
-            features = torch.lerp(raw_features[:batch], raw_features[batch:], 0.5)
+            features = torch.lerp(
+                projected_features[:batch], projected_features[batch:], 0.5)
             # features = raw_features[:batch]
             # cpu
-            intra_pairs, inter_pairs, intra_labels, inter_labels = self.get_pairs(features, targets)
-            # inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
-            inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
-            intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
+            intra_pairs, inter_pairs, intra_labels, inter_labels = self.get_pairs(
+                features, targets)
+            inter_pairs_feature = features[inter_pairs[:, 0]
+                                           ], features[inter_pairs[:, 1]]
+            intra_pairs_feature = features[intra_pairs[:, 0]
+                                           ], features[intra_pairs[:, 1]]
             # Triplet
             # RankLoss
 
@@ -114,6 +121,7 @@ class MyNet(nn.Module):
 
         return intra_pairs, inter_pairs, intra_labels, inter_labels
 
+
 class projection_MLP(nn.Module):
     def __init__(self, in_dim, out_dim=256):
         super().__init__()
@@ -134,4 +142,3 @@ def pdist(vectors):
     distance_matrix = -2 * vectors.mm(torch.t(vectors)) + vectors.pow(
         2).sum(dim=1).view(1, -1) + vectors.pow(2).sum(dim=1).view(-1, 1)
     return distance_matrix
-
