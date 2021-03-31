@@ -5,7 +5,7 @@ from torch.nn import DataParallel
 from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES
-from core import model, dataset, resnet
+from core import model, dataset, resnet, visible
 from core.utils import init_log, progress_bar, AverageMeter
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
@@ -53,7 +53,7 @@ raw_optimizer = torch.optim.SGD(
     raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 
 schedulers = [
-    MultiStepLR(raw_optimizer, milestones=[10, 50], gamma=0.1),
+    MultiStepLR(raw_optimizer, milestones=[50, 100], gamma=0.1),
     # CosineAnnealingLR(raw_optimizer, 100 * len(trainloader))
 ]
 
@@ -89,7 +89,9 @@ for epoch in range(start_epoch, 500):
         intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
             projected_features[:batch_size], projected_features[batch_size:], target)
         # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
-        inter_dist_loss = 0
+        flag = torch.ones(batch_size, 1).cuda()
+        inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
+            inter_pairs[0], inter_pairs[1], flag)
         dist_loss = torch.nn.TripletMarginLoss()(
             intra_pairs[0], intra_pairs[1], inter_pairs[1])
 
@@ -132,10 +134,15 @@ for epoch in range(start_epoch, 500):
                     torch.ones(batch_size, 1)).cuda()
                 intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(
                     projected_features[:batch_size], projected_features[batch_size:], target)
-                inter_dist_loss = torch.nn.CosineEmbeddingLoss(
-                    reduction="mean")(inter_pairs[0], inter_pairs[1], target)
+                # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
+                flag = torch.ones(batch_size, 1).cuda()
+                inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
+                    inter_pairs[0], inter_pairs[1], flag)
                 dist_loss = torch.nn.TripletMarginLoss()(
                     intra_pairs[0], intra_pairs[1], inter_pairs[1])
+
+                # visible.plot_embedding(
+                #    raw_features, torch.cat([labels, labels], dim=0), "raw_feature")
 
                 # caculate accuracy
                 _, raw_predict = torch.max(raw_logits, 1)
