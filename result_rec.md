@@ -25,3 +25,11 @@
 | resnet50 + model1:cosine_similarity            | 256x256(224x224) | 40         | 90%      | 30    | part    | 3.21 |     |
 | resnet50 + model1:inter+intra_dist             | 256x256(224x224) | 20         | 90.2%    | 100   | part    | 3.29 |     |
 | resnet50 + model1:inter+intra_dist+tripletLoss | 256x256(224x224) | 13x3       | 91.6%    | 50    | part    | 3.30 |     |
+
+- experiments on C20
+
+| model                               | image_size       | batch_size | accuracy | epoch | dataset | date | id  |
+| ----------------------------------- | ---------------- | ---------- | -------- | ----- | ------- | ---- | --- |
+| resnet50                            | 256x256(224x224) | 80         | 91.1%    | 40    | C20     | 3.31 |     |
+| resnet50 + model1:cosine_similarity | 256x256(224x224) | 40         | 90.7%    | 40    | C20     | 3.31 |     |
+| resnet50 + model1:inter+intra_dist  | 256x256(224x224) | 20         | 90.2%    | 100   | part    | 3.29 |     |
