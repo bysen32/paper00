@@ -36,5 +36,6 @@
 | resnet50 + intra:pp(2048-512)                        | 256x256(224x224) | 20         | 92.4%     | 40    | C20     | 3.31 |     |
 | resnet50 + intra:pp(2048-512) drop=0.5               | 256x256(224x224) | 20         | 91.8%     | 40    | C20     | 3.31 |     |
 | resnet50 + intra:pp(2048-512) inter:map triplet(p=2) | 256x256(224x224) | 20         | **93.2%** | 40    | C20     | 3.31 |     |
+| resnet50 + intra:pp(2048-512) inter:map triplet(p=1) | 256x256(224x224) | 20         | 92.0%     | 40    | C20     | 3.31 |     |
 | resnet50 + intra:raw_feature inter:raw_feature       | 256x256(224x224) | 20         | 83.3%     | 60    | C20     | 3.31 |     |
 | resnet50 + intra:projected_features(512) triplet:rrr | 256x256(224x224) | 20         | 85.0%     | 60    | C20     | 3.31 |     |
