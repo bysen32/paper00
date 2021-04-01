@@ -7,6 +7,7 @@ from config import INPUT_SIZE, DEV_MODE
 import torch
 from torch.utils.data.sampler import BatchSampler
 from torch.utils.data import Dataset
+import core
 
 
 class CUB:
@@ -130,7 +131,7 @@ class CUB_Train:
         img = (img1, img2)
         # label = torch.LongTensor([label])
 
-        return [img, label]
+        return [img, label, index]
 
     def __len__(self):
         return len(self.labels)
@@ -204,11 +205,18 @@ class BatchDataset(Dataset):
         label = int(label)
         # label = torch.LongTensor([label])
 
-        return [(img1, img2), label]
+        return [(img1, img2), label, index]
 
     def __len__(self):
         return len(self.imglist)
 
+
+# 修改这个取数据类的逻辑
+# 1. {}
+# 取到某个样本classA idx_a, -> 与该样本最相似的异类样本classB idx_b。
+# 每个epoch将生成绝大部分的样本特征。
+# 结束后，更新最近映射表
+# 策略：找到很多环。取出打上使用标记。
 
 class BalancedBatchSampler(BatchSampler):
     def __init__(self, dataset, n_classes, n_samples):
@@ -226,22 +234,40 @@ class BalancedBatchSampler(BatchSampler):
         self.batch_size = self.n_samples * self.n_classes
 
     def __iter__(self):
-        self.count = 0
-        while self.count + self.batch_size < len(self.dataset):
-            classes = np.random.choice(
-                self.labels_set, self.n_classes, replace=False)
-            # classes = np.random.choice(self.labels_set, self.n_classes)
-            indices = []
-            for class_ in classes:
-                cur = self.used_label_indices_count[class_]
-                indices.extend(
-                    self.label_to_indices[class_][cur:cur+self.n_samples])
-                self.used_label_indices_count[class_] += self.n_samples
-                if self.used_label_indices_count[class_] + self.n_samples > len(self.label_to_indices[class_]):
-                    np.random.shuffle(self.label_to_indices[class_])
-                    self.used_label_indices_count[class_] = 0
-            yield indices
-            self.count += self.n_classes * self.n_samples
+        if len(core.model.g_InterPairs) == len(self.dataset):
+            self.count = 0
+            self.idxs_used = [False for _ in range(len(self.labels))]
+            cur_idx = 0
+            while self.count + self.batch_size <= len(self.dataset):
+                indices = []
+                while len(indices) < self.batch_size:
+                    if self.idxs_used[cur_idx]:
+                        idxlist = [idx for idx, flag in enumerate(
+                            self.idxs_used) if flag == False]
+                        np.random.shuffle(idxlist)
+                        cur_idx = idxlist[0]
+
+                    self.idxs_used[cur_idx] = True
+                    indices.append(cur_idx)
+                    cur_idx = core.model.g_InterPairs[cur_idx][1].item()
+                yield indices
+                self.count += self.batch_size
+        else:
+            self.count = 0
+            while self.count + self.batch_size <= len(self.dataset):
+                classes = np.random.choice(
+                    self.labels_set, self.n_classes, replace=False)
+                indices = []
+                for class_ in classes:
+                    cur = self.used_label_indices_count[class_]
+                    indices.extend(
+                        self.label_to_indices[class_][cur:cur+self.n_samples])
+                    self.used_label_indices_count[class_] += self.n_samples
+                    if self.used_label_indices_count[class_] + self.n_samples > len(self.label_to_indices[class_]):
+                        np.random.shuffle(self.label_to_indices[class_])
+                        self.used_label_indices_count[class_] = 0
+                yield indices
+                self.count += self.n_classes * self.n_samples
 
     def __len__(self):
         return len(self.dataset) // self.batch_size

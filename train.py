@@ -71,8 +71,9 @@ for epoch in range(start_epoch, 500):
     _print("--" * 50)
     # _print("resnet50 model1: cossim model2 224x224 batchsize:30")
     net.train()
-    for i, (input, target) in enumerate(trainloader):
+    for i, (input, target, idxs) in enumerate(trainloader):
         imgs, labels = input, target.cuda()
+        idxs = idxs.cuda()
         images1, images2 = imgs
         images1 = images1.cuda()
         images2 = images2.cuda()
@@ -81,7 +82,7 @@ for epoch in range(start_epoch, 500):
         raw_optimizer.zero_grad()
 
         raw_logits, _, raw_features, projected_features, intra_pairs, inter_pairs = net(
-            (images1, images2), labels)
+            (images1, images2), labels, idxs)
         raw_loss = criterion(raw_logits, torch.cat([labels, labels], dim=0))
         # feature_loss = criterion(features, labels)
 
@@ -92,7 +93,7 @@ for epoch in range(start_epoch, 500):
         # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
         # flag = torch.ones(batch_size, 1).cuda()
         # inter_dist_loss = torch.nn.MarginRankingLoss(margin = 0.05)(inter_pairs[0], inter_pairs[1], flag)
-        dist_loss = torch.nn.TripletMarginLoss()(
+        dist_loss = torch.nn.TripletMarginLoss(margin=20)(
             inter_pairs[0], inter_pairs[0], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
@@ -106,6 +107,8 @@ for epoch in range(start_epoch, 500):
     for sch in schedulers:
         sch.step()
 
+    model.trainend()
+
     if epoch % SAVE_FREQ == 0:
         raw_losses = AverageMeter()
         features_loss_total = 0
@@ -118,13 +121,14 @@ for epoch in range(start_epoch, 500):
         for i, data in enumerate(trainloader):
             with torch.no_grad():
                 imgs, labels = data[0], data[1].cuda()
+                idxs = data[2].cuda()
                 images1, images2 = imgs
                 images1 = images1.cuda()
                 images2 = images2.cuda()
                 batch_size = images1.size(0)
 
                 raw_logits, _, raw_features, projected_features, intra_pairs, inter_pairs = net(
-                    (images1, images2), labels)
+                    (images1, images2), labels, idxs)
                 # caculate class loss
                 raw_loss = criterion(
                     raw_logits, torch.cat([labels, labels], dim=0))
@@ -139,7 +143,7 @@ for epoch in range(start_epoch, 500):
                 # inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
                 #   inter_pairs[0], inter_pairs[1], flag)
                 # dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
-                dist_loss = torch.nn.TripletMarginLoss()(
+                dist_loss = torch.nn.TripletMarginLoss(margin=20)(
                     inter_pairs[0], inter_pairs[0], inter_pairs[1])
 
                 # visible.plot_embedding(
