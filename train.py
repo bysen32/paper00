@@ -93,7 +93,7 @@ for epoch in range(start_epoch, 500):
         # flag = torch.ones(batch_size, 1).cuda()
         # inter_dist_loss = torch.nn.MarginRankingLoss(margin = 0.05)(inter_pairs[0], inter_pairs[1], flag)
         dist_loss = torch.nn.TripletMarginLoss()(
-            inter_pairs[0], intra_pairs[0], inter_pairs[1])
+            inter_pairs[0], inter_pairs[0], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
         total_loss = raw_loss + dist_loss + intra_dist_loss
@@ -143,7 +143,7 @@ for epoch in range(start_epoch, 500):
                 #   inter_pairs[0], inter_pairs[1], flag)
                 # dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
                 dist_loss = torch.nn.TripletMarginLoss()(
-                    inter_pairs[0], intra_pairs[0], inter_pairs[1])
+                    inter_pairs[0], inter_pairs[0], inter_pairs[1])
 
                 # visible.plot_embedding(
                 #    raw_features, torch.cat([labels, labels], dim=0), "raw_feature")

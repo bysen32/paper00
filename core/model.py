@@ -28,9 +28,9 @@ class MyNet(nn.Module):
         #     torch.nn.Dropout(p=0.5),
         #     torch.nn.Linear(2048, 200)
         # )
-        self.map1 = nn.Linear(2048*2, 512)
-        self.map2 = nn.Linear(512, 2048)
-        self.drop = nn.Dropout(p=0.5)
+        # self.map1 = nn.Linear(2048*2, 512)
+        # self.map2 = nn.Linear(512, 2048)
+        # self.drop = nn.Dropout(p=0.5)
         # self.sigmoid = nn.Sigmoid()
 
     def forward(self, X, targets, idxs=None, flag="train"):
@@ -45,26 +45,29 @@ class MyNet(nn.Module):
             # map1_out = self.map1(raw_features)
             # map1_out = self.drop(map1_out)
             # projected_features = self.map2(map1_out)
-            projected_features = self.projector(raw_features)
+            projected_features = self.projector(raw_features)  # 2048 -> 512
 
             # 融合
             # features = torch.lerp(projected_features[:batch], projected_features[batch:], 0.5)
             # features = raw_features[:batch]
-            map1_out = self.map1(
-                torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
-            map1_out = self.drop(map1_out)
-            features = self.map2(map1_out)
+            # map1_out = self.map1(
+            #     torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
+            # map1_out = self.drop(map1_out)
+            # features = self.map2(map1_out)
 
-            for i, f in enumerate(features):
-                g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
-                g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
+            # for i, f in enumerate(features):
+            #     g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
+            #     g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
+            features = torch.maximum(
+                raw_features[:batch], raw_features[batch:])
 
             intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(
-                features, targets)
-            inter_pairs_feature = features[inter_pairs[:, 0]
-                                           ], features[inter_pairs[:, 1]]
-            intra_pairs_feature = features[intra_pairs[:, 0]
-                                           ], features[intra_pairs[:, 1]]
+                projected_features[:batch], targets)
+            inter_pairs_feature = projected_features[inter_pairs[:, 0]
+                                                     ], projected_features[inter_pairs[:, 1]]
+            # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
+            intra_pairs_feature = projected_features[:
+                                                     batch], projected_features[batch:]
             # Triplet
             # RankLoss
 

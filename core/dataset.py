@@ -234,7 +234,7 @@ class BalancedBatchSampler(BatchSampler):
         self.batch_size = self.n_samples * self.n_classes
 
     def __iter__(self):
-        if len(core.model.g_InterPairs) == len(self.dataset):
+        if False and len(core.model.g_InterPairs) == len(self.dataset):
             self.count = 0
             self.idxs_used = [False for _ in range(len(self.labels))]
             idxlist = [i for i in range(len(self.labels))]
