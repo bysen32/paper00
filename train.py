@@ -19,7 +19,6 @@ os.makedirs(save_dir)
 logging = init_log(save_dir)
 _print = logging.info
 
-
 # read dataset
 # trainset = dataset.CUB(root="./CUB_200_2011", is_train=True, data_len=None)
 # trainset = dataset.CUB_Train(root="./CUB_200_2011")
@@ -93,8 +92,8 @@ for epoch in range(start_epoch, 500):
         # inter_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(inter_pairs[0], inter_pairs[1], target)
         # flag = torch.ones(batch_size, 1).cuda()
         # inter_dist_loss = torch.nn.MarginRankingLoss(margin = 0.05)(inter_pairs[0], inter_pairs[1], flag)
-        dist_loss = torch.nn.TripletMarginLoss(margin=20)(
-            inter_pairs[0], inter_pairs[0], inter_pairs[1])
+        dist_loss = torch.nn.TripletMarginLoss()(
+            inter_pairs[0], intra_pairs[0], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
         total_loss = raw_loss + dist_loss + intra_dist_loss
@@ -143,8 +142,8 @@ for epoch in range(start_epoch, 500):
                 # inter_dist_loss = torch.nn.MarginRankingLoss(margin=0.05)(
                 #   inter_pairs[0], inter_pairs[1], flag)
                 # dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
-                dist_loss = torch.nn.TripletMarginLoss(margin=20)(
-                    inter_pairs[0], inter_pairs[0], inter_pairs[1])
+                dist_loss = torch.nn.TripletMarginLoss()(
+                    inter_pairs[0], intra_pairs[0], inter_pairs[1])
 
                 # visible.plot_embedding(
                 #    raw_features, torch.cat([labels, labels], dim=0), "raw_feature")

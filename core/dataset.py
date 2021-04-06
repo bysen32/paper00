@@ -94,7 +94,7 @@ def default_loader(path):
     except:
         with open('read_error.txt', 'a') as fid:
             fid.write(path+'\n')
-        return Image.new('RGB', (224, 224), 'white')
+        return Image.new('RGB', INPUT_SIZE, 'white')
     return img
 
 
@@ -102,7 +102,7 @@ class CUB_Train:
     def __init__(self, root=None, dataloader=default_loader):
         self.transform = transforms.Compose([
             transforms.Resize([256, 256]),
-            transforms.RandomCrop([244, 244]),
+            transforms.RandomCrop(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
@@ -141,7 +141,7 @@ class CUB_Test:
     def __init__(self, root=None, dataloader=default_loader):
         self.transform = transforms.Compose([
             transforms.Resize([256, 256]),
-            transforms.RandomCrop([244, 244]),
+            transforms.CenterCrop(INPUT_SIZE),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225))
@@ -177,7 +177,7 @@ class BatchDataset(Dataset):
     def __init__(self, root=None, dataloader=default_loader):
         self.transform = transforms.Compose([
             transforms.Resize([256, 256]),
-            transforms.RandomCrop([244, 244]),
+            transforms.RandomCrop(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
@@ -237,16 +237,14 @@ class BalancedBatchSampler(BatchSampler):
         if len(core.model.g_InterPairs) == len(self.dataset):
             self.count = 0
             self.idxs_used = [False for _ in range(len(self.labels))]
-            cur_idx = 0
+            idxlist = [i for i in range(len(self.labels))]
+            np.random.shuffle(idxlist)
+            cur_idx = idxlist.pop()
             while self.count + self.batch_size <= len(self.dataset):
                 indices = []
                 while len(indices) < self.batch_size:
                     if self.idxs_used[cur_idx]:
-                        idxlist = [idx for idx, flag in enumerate(
-                            self.idxs_used) if flag == False]
-                        np.random.shuffle(idxlist)
-                        cur_idx = idxlist[0]
-
+                        cur_idx = idxlist.pop()
                     self.idxs_used[cur_idx] = True
                     indices.append(cur_idx)
                     cur_idx = core.model.g_InterPairs[cur_idx][1].item()
@@ -274,9 +272,6 @@ class BalancedBatchSampler(BatchSampler):
 
 
 if __name__ == "__main__":
-    # INPUT_SIZE = (448, 448)
-    INPUT_SIZE = (224, 224)
-
     trainset = CUB(root="./CUB_200_2011", is_train=True)
     print(len(trainset.train_img))
     print(len(trainset.train_label))
