@@ -4,7 +4,7 @@ import torch.utils.data
 from torch.nn import DataParallel
 from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
-from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES
+from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES, TRAIN_CLASS
 from core import model, dataset, resnet, visible
 from core.utils import init_log, progress_bar, AverageMeter
 
@@ -93,7 +93,7 @@ for epoch in range(start_epoch, 500):
         # flag = torch.ones(batch_size, 1).cuda()
         # inter_dist_loss = torch.nn.MarginRankingLoss(margin = 0.05)(inter_pairs[0], inter_pairs[1], flag)
         dist_loss = torch.nn.TripletMarginLoss()(
-            inter_pairs[0], inter_pairs[0], inter_pairs[1])
+            inter_pairs[0], intra_pairs[0], inter_pairs[1])
 
         # ---------- pairs attention struct ---------------------
         total_loss = raw_loss + dist_loss + intra_dist_loss
@@ -114,6 +114,8 @@ for epoch in range(start_epoch, 500):
         dist_losses = AverageMeter()
         intra_dist_losses = AverageMeter()
         inter_dist_losses = AverageMeter()
+        g_WALabelCount = torch.zeros(TRAIN_CLASS)
+        g_TrainLabelCount = torch.zeros(TRAIN_CLASS)
         train_correct = 0
         total = 0
         net.eval()
@@ -143,7 +145,7 @@ for epoch in range(start_epoch, 500):
                 #   inter_pairs[0], inter_pairs[1], flag)
                 # dist_loss = torch.nn.TripletMarginLoss()(projected_features[:batch_size], projected_features[batch_size:], inter_pairs[1])
                 dist_loss = torch.nn.TripletMarginLoss()(
-                    inter_pairs[0], inter_pairs[0], inter_pairs[1])
+                    inter_pairs[0], intra_pairs[0], inter_pairs[1])
 
                 # visible.plot_embedding(
                 #    raw_features, torch.cat([labels, labels], dim=0), "raw_feature")
@@ -151,6 +153,13 @@ for epoch in range(start_epoch, 500):
                 # caculate accuracy
                 _, raw_predict = torch.max(raw_logits, 1)
                 total += batch_size * 2
+
+                res = raw_predict.data == torch.cat(
+                    [labels, labels], dim=0).data
+                waIdxs = torch.where(res == False)
+                waLabels = torch.cat([labels, labels], dim=0)[waIdxs]
+                g_WALabelCount[waLabels] += 1
+                g_TrainLabelCount[labels] += 2
 
                 train_correct += torch.sum(raw_predict.data ==
                                            torch.cat([labels, labels], dim=0).data)
@@ -169,6 +178,7 @@ for epoch in range(start_epoch, 500):
             epoch, train_loss, raw_losses.avg, dist_losses.avg, intra_dist_losses.avg, inter_dist_losses.avg))
         _print("train acc: {:.3f} total sample: {}".format(
             train_acc, total))
+        # _print(g_WALabelCount/g_TrainLabelCount)
 
         # evaluate on test set
         test_loss = 0

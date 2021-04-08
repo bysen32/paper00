@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from core import resnet
+from config import TRAIN_CLASS
 import numpy as np
 import sys
 sys.path.append("../")
@@ -10,6 +11,7 @@ sys.path.append("../")
 g_Features = {}
 g_Labels = {}
 g_InterPairs = []
+g_LabelDiff = None
 
 
 class MyNet(nn.Module):
@@ -34,7 +36,7 @@ class MyNet(nn.Module):
         # self.sigmoid = nn.Sigmoid()
 
     def forward(self, X, targets, idxs=None, flag="train"):
-        global g_Features, g_Labels, g_InterPairs
+        global g_Features, g_Labels
         if flag == "train":
             batch = targets.size(0)
             images = torch.cat(X, dim=0)
@@ -54,20 +56,19 @@ class MyNet(nn.Module):
             #     torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
             # map1_out = self.drop(map1_out)
             # features = self.map2(map1_out)
+            features = torch.lerp(
+                raw_features[:batch], raw_features[batch:], 0.5)
 
-            # for i, f in enumerate(features):
-            #     g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
-            #     g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
-            features = torch.maximum(
-                raw_features[:batch], raw_features[batch:])
+            for i, f in enumerate(features):
+                g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
+                g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
 
             intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(
-                projected_features[:batch], targets)
-            inter_pairs_feature = projected_features[inter_pairs[:, 0]
-                                                     ], projected_features[inter_pairs[:, 1]]
+                features, targets)
+            inter_pairs_feature = features[inter_pairs[:, 0]
+                                           ], features[inter_pairs[:, 1]]
             # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
-            intra_pairs_feature = projected_features[:
-                                                     batch], projected_features[batch:]
+            intra_pairs_feature = features[:batch], features[batch:]
             # Triplet
             # RankLoss
 
@@ -161,10 +162,12 @@ def pdist(vectors):
 
 
 def trainend():
-    global g_Features, g_Labels, g_InterPairs
-    if (len(g_Features) == 600):
+    global g_Features, g_Labels, g_InterPairs, g_LabelDiff
+    # C20 train sample 600
+    if len(g_Features) == 600:
         features = []
         targets = []
+        g_LabelDiff = torch.zeros((TRAIN_CLASS, TRAIN_CLASS))
         for key in g_Features.keys():
             features.append(g_Features[key])
             targets.append(g_Labels[key].item())
@@ -173,4 +176,14 @@ def trainend():
 
         intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(
             features, targets)
-        g_InterPairs = inter_pairs
+        g_InterPairs = inter_pairs  # idx : idx
+        # 2. 计算各个类间的差异
+        # 2.1 样本 vs 样本 间差异
+        # 2.2 样本 vs 类 间差异
+        # 2.3 类 vs 类 间差异
+
+        # inter_labels[:, 0], inter_labels[:, 1]  # label vs label
+        for inter in inter_labels:
+            g_LabelDiff[inter[0], inter[1]] += 1
+        # print(torch.sum(g_LabelDiff))
+        # print(g_LabelDiff)

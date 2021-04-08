@@ -234,22 +234,38 @@ class BalancedBatchSampler(BatchSampler):
         self.batch_size = self.n_samples * self.n_classes
 
     def __iter__(self):
-        if False and len(core.model.g_InterPairs) == len(self.dataset):
+        if len(core.model.g_InterPairs) == len(self.dataset):
             self.count = 0
-            self.idxs_used = [False for _ in range(len(self.labels))]
-            idxlist = [i for i in range(len(self.labels))]
-            np.random.shuffle(idxlist)
-            cur_idx = idxlist.pop()
+            # while self.count + self.batch_size <= len(self.dataset):
+            #     self.idxs_used = [False for _ in range(len(self.labels))]
+            #     idxlist = [i for i in range(len(self.labels))]
+            #     np.random.shuffle(idxlist)
+            #     cur_idx = idxlist.pop()
+            #     indices = []
+            #     while len(indices) < self.batch_size:  # 随机取一个batch 可以重复
+            #         if self.idxs_used[cur_idx]:
+            #             cur_idx = idxlist.pop()
+            #         self.idxs_used[cur_idx] = True
+            #         indices.append(cur_idx)
+            #         cur_idx = core.model.g_InterPairs[cur_idx][1].item()
+            #     yield indices
+            #     self.count += self.batch_size
             while self.count + self.batch_size <= len(self.dataset):
+                classes = np.random.choice(self.labels_set, 1)
+                indices = torch.sort(
+                    core.model.g_LabelDiff[classes[0]], descending=True).indices
+                classes = np.append(classes, indices[:self.n_classes-1])
                 indices = []
-                while len(indices) < self.batch_size:
-                    if self.idxs_used[cur_idx]:
-                        cur_idx = idxlist.pop()
-                    self.idxs_used[cur_idx] = True
-                    indices.append(cur_idx)
-                    cur_idx = core.model.g_InterPairs[cur_idx][1].item()
+                for class_ in classes:
+                    cur = self.used_label_indices_count[class_]
+                    indices.extend(
+                        self.label_to_indices[class_][cur: cur + self.n_samples])
+                    self.used_label_indices_count[class_] += self.n_samples
+                    if self.used_label_indices_count[class_] + self.n_samples > len(self.label_to_indices[class_]):
+                        np.random.shuffle(self.label_to_indices[class_])
+                        self.used_label_indices_count[class_] = 0
                 yield indices
-                self.count += self.batch_size
+                self.count += self.n_classes * self.n_samples
         else:
             self.count = 0
             while self.count + self.batch_size <= len(self.dataset):
