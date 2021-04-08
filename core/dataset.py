@@ -253,7 +253,7 @@ class BalancedBatchSampler(BatchSampler):
             while self.count + self.batch_size <= len(self.dataset):
                 classes = np.random.choice(self.labels_set, 1)
                 indices = torch.sort(
-                    core.model.g_LabelDiff[classes[0]], descending=True).indices
+                    core.model.g_LabelDiff[classes[0]], descending=True)[1]
                 classes = np.append(classes, indices[:self.n_classes-1])
                 indices = []
                 for class_ in classes:

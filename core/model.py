@@ -67,8 +67,8 @@ class MyNet(nn.Module):
                 features, targets)
             inter_pairs_feature = features[inter_pairs[:, 0]
                                            ], features[inter_pairs[:, 1]]
-            # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
-            intra_pairs_feature = features[:batch], features[batch:]
+            intra_pairs_feature = features[intra_pairs[:, 0]
+                                           ], features[intra_pairs[:, 1]]
             # Triplet
             # RankLoss
 
