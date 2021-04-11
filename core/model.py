@@ -40,6 +40,8 @@ class MyNet(nn.Module):
         if flag == "train":
             batch = targets.size(0)
             images = torch.cat(X, dim=0)
+            # targets = torch.cat([targets, targets], dim=0)
+            # idxs = torch.cat([idxs, idxs], dim=0)
 
             # resnet_out, rpn_feature, feature = self.pretrained_model(x)
             raw_logits, _, raw_features = self.pretrained_model(images)
@@ -52,8 +54,7 @@ class MyNet(nn.Module):
             # 融合
             # features = torch.lerp(projected_features[:batch], projected_features[batch:], 0.5)
             # features = raw_features[:batch]
-            # map1_out = self.map1(
-            #     torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
+            # map1_out = self.map1(torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
             # map1_out = self.drop(map1_out)
             # features = self.map2(map1_out)
             features = torch.lerp(

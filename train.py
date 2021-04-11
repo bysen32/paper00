@@ -156,10 +156,10 @@ for epoch in range(start_epoch, 500):
 
                 res = raw_predict.data == torch.cat(
                     [labels, labels], dim=0).data
-                waIdxs = torch.where(res == False)
-                waLabels = torch.cat([labels, labels], dim=0)[waIdxs]
-                g_WALabelCount[waLabels] += 1
-                g_TrainLabelCount[labels] += 2
+                # waIdxs = torch.where(res == False)
+                # waLabels = torch.cat([labels, labels], dim=0)[waIdxs]
+                # g_WALabelCount[waLabels] += 1
+                # g_TrainLabelCount[labels] += 2
 
                 train_correct += torch.sum(raw_predict.data ==
                                            torch.cat([labels, labels], dim=0).data)
