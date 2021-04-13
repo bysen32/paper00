@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from core import resnet
-from config import TRAIN_CLASS
+from config import TRAIN_CLASS, TRAIN_SAMPLE
 import numpy as np
 import sys
 sys.path.append("../")
@@ -26,57 +26,79 @@ class MyNet(nn.Module):
         self.projector = projection_MLP(2048, 512)
 
         # API-Net struct
-        # self.fc = torch.nn.Sequential(
-        #     torch.nn.Dropout(p=0.5),
-        #     torch.nn.Linear(2048, 200)
-        # )
-        # self.map1 = nn.Linear(2048*2, 512)
-        # self.map2 = nn.Linear(512, 2048)
-        # self.drop = nn.Dropout(p=0.5)
-        # self.sigmoid = nn.Sigmoid()
+        self.fc = torch.nn.Sequential(
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(2048, 200)
+        )
+        self.map1 = nn.Linear(2048 * 2, 512)
+        self.map2 = nn.Linear(512, 2048)
+        self.drop = nn.Dropout(p=0.5)
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, X, targets, idxs=None, flag="train"):
+    def forward(self, images, targets, idxs=None, flag="train"):
         global g_Features, g_Labels
         if flag == "train":
             batch = targets.size(0)
-            images = torch.cat(X, dim=0)
-            # targets = torch.cat([targets, targets], dim=0)
-            # idxs = torch.cat([idxs, idxs], dim=0)
+            # images = torch.cat(X, dim=0)  # 2*batch_size
 
             # resnet_out, rpn_feature, feature = self.pretrained_model(x)
             raw_logits, _, raw_features = self.pretrained_model(images)
+            # raw_features 2*batch_size
 
             # map1_out = self.map1(raw_features)
             # map1_out = self.drop(map1_out)
             # projected_features = self.map2(map1_out)
             projected_features = self.projector(raw_features)  # 2048 -> 512
+            # 2* batchsize
 
             # 融合
             # features = torch.lerp(projected_features[:batch], projected_features[batch:], 0.5)
             # features = raw_features[:batch]
-            # map1_out = self.map1(torch.cat([raw_features[:batch], raw_features[batch:]], dim=1))
+            # map1_out = self.map1(raw_features)
             # map1_out = self.drop(map1_out)
             # features = self.map2(map1_out)
-            features = torch.lerp(
-                raw_features[:batch], raw_features[batch:], 0.5)
+            # features = torch.lerp(raw_features[:batch], raw_features[batch:], 0.5)
 
-            for i, f in enumerate(features):
-                g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
-                g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
+            # for i, f in enumerate(features):
+            #     g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
+            #     g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
 
             intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(
-                features, targets)
-            inter_pairs_feature = features[inter_pairs[:, 0]
-                                           ], features[inter_pairs[:, 1]]
-            intra_pairs_feature = features[intra_pairs[:, 0]
-                                           ], features[intra_pairs[:, 1]]
-            # Triplet
-            # RankLoss
+                raw_features, targets)
+            features1 = torch.cat(
+                [raw_features[intra_pairs[:, 0]], raw_features[inter_pairs[:, 0]]], dim=0)
+            # feature1 4*batchsize
+            features2 = torch.cat(
+                [raw_features[intra_pairs[:, 1]], raw_features[inter_pairs[:, 1]]], dim=0)
+            labels1 = torch.cat(
+                [intra_labels[:, 0], inter_labels[:, 0]], dim=0)
+            labels2 = torch.cat(
+                [intra_labels[:, 1], inter_labels[:, 1]], dim=0)
 
-            return raw_logits, _, raw_features, projected_features, intra_pairs_feature, inter_pairs_feature
+            mutual_features = torch.cat([features1, features2], dim=1)
+            map1_out = self.map1(mutual_features)
+            map2_out = self.drop(map1_out)
+            map2_out = self.map2(map2_out)
+
+            gate1 = torch.mul(map2_out, features1)
+            gate1 = self.sigmoid(gate1)
+
+            gate2 = torch.mul(map2_out, features2)
+            gate2 = self.sigmoid(gate2)
+
+            features1_self = torch.mul(gate1, features1)
+            features2_self = torch.mul(gate2, features2)
+            logit1_self = self.fc(self.drop(features1_self))
+            logit2_self = self.fc(self.drop(features2_self))
+
+            # inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
+            # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
+
+            # return raw_logits, _, raw_features, projected_features, intra_pairs_feature, inter_pairs_feature
+            return raw_logits, _, raw_features, logit1_self, logit2_self, labels1, labels2
         else:
-            batch = X.size(0)
-            return self.pretrained_model(X)
+            batch = images.size(0)
+            return self.pretrained_model(images)
 
     def show_feature_map(self, feature_map):
         feature_map = feature_map.squeeze(0)
@@ -109,15 +131,16 @@ def get_pairs(embeddings, labels):
     dist_same = distance_matrix.copy()
     dist_same[lb_eqs == False] = np.inf
     intra_idxs = np.argmin(dist_same, axis=1)
-    intra_pairs = np.zeros([batch_size, 2])
-    intra_labels = np.zeros([batch_size, 2])
 
-    lb_eqs[dia_inds] = True
     dist_diff = distance_matrix.copy()
+    lb_eqs[dia_inds] = True
     dist_diff[lb_eqs == True] = np.inf
     inter_idxs = np.argmin(dist_diff, axis=1)
-    inter_pairs = np.zeros([batch_size, 2])
-    inter_labels = np.zeros([batch_size, 2])
+
+    intra_pairs = np.zeros([embeddings.shape[0], 2])
+    intra_labels = np.zeros([embeddings.shape[0], 2])
+    inter_pairs = np.zeros([embeddings.shape[0], 2])
+    inter_labels = np.zeros([embeddings.shape[0], 2])
 
     for i in range(batch_size):
         intra_pairs[i, 0] = i
@@ -165,7 +188,7 @@ def pdist(vectors):
 def trainend():
     global g_Features, g_Labels, g_InterPairs, g_LabelDiff
     # C20 train sample 600
-    if len(g_Features) == 600:
+    if len(g_Features) == TRAIN_SAMPLE:
         features = []
         targets = []
         g_LabelDiff = torch.zeros((TRAIN_CLASS, TRAIN_CLASS))

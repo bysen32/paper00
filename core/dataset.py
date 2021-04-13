@@ -128,8 +128,9 @@ class CUB_Train:
 
         img1 = self.transform(img)
         img2 = self.transform(img)
-        img = (img1, img2)
-        # label = torch.LongTensor([label])
+        img = torch.cat([img1, img2], dim=0)
+        label = torch.cat([label, label], dim=0)
+        index = torch.cat([index, index], dim=0)
 
         return [img, label, index]
 
@@ -167,7 +168,7 @@ class CUB_Test:
         img = self.transform(img)
         # label = torch.LongTensor([label])
 
-        return [img, label]
+        return [img, label, index]
 
     def __len__(self):
         return len(self.labels)
@@ -202,8 +203,11 @@ class BatchDataset(Dataset):
         img = self.dataloader(image_path)
         img1 = self.transform(img)
         img2 = self.transform(img)
+        # images = torch.cat([img1, img2], dim=0)
+
+        # label = torch.LongTensor([int(label)])
         label = int(label)
-        # label = torch.LongTensor([label])
+        # index = torch.LongTensor([index])
 
         return [(img1, img2), label, index]
 
@@ -234,7 +238,7 @@ class BalancedBatchSampler(BatchSampler):
         self.batch_size = self.n_samples * self.n_classes
 
     def __iter__(self):
-        if len(core.model.g_InterPairs) == len(self.dataset):
+        if False and len(core.model.g_InterPairs) == len(self.dataset):
             self.count = 0
             # while self.count + self.batch_size <= len(self.dataset):
             #     self.idxs_used = [False for _ in range(len(self.labels))]
