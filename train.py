@@ -45,6 +45,8 @@ if resume and os.path.isfile(resume):
     _print("Load {}".format(resume))
 
 criterion = torch.nn.CrossEntropyLoss().cuda()
+rank_criterion = torch.nn.MarginRankingLoss(margin=0.05)
+softmax_layer = torch.nn.Softmax(dim=1).cuda()
 
 # define optimizers
 raw_parameters = list(net.parameters())
@@ -76,14 +78,35 @@ for epoch in range(start_epoch, 500):
         images = torch.cat(images, dim=0).cuda()
         labels = torch.cat([labels, labels], dim=0).cuda()
         idxs = torch.cat([idxs, idxs], dim=0).cuda()
-        batch_size = images.size(0)
 
         raw_optimizer.zero_grad()
-        raw_logits, _, raw_features, logit1_self, logit2_self, labels1, labels2 = net(
+
+        raw_logits, _, raw_features, logit1_self, logit1_other, logit2_self, logit2_other, labels1, labels2 = net(
             images, labels, idxs)
+        batch_size = logit1_self.shape[0]
+
+        self_logits = torch.zeros(2*batch_size, 200).cuda()
+        other_logits = torch.zeros(2*batch_size, 200).cuda()
+        self_logits[:batch_size] = logit1_self
+        self_logits[batch_size:] = logit2_self
+        # other_logits[:batch_size] = logit1_other
+        # other_logits[batch_size:] = logit2_other
+
+        # logits = torch.cat([self_logits, other_logits], dim=0)
+        targets = torch.cat([labels1, labels2], dim=0)
+        softmax_loss = criterion(self_logits, targets)
+
         raw_loss = criterion(raw_logits, labels)
-        raw1_self_loss = criterion(logit1_self, labels1)
-        raw2_self_loss = criterion(logit2_self, labels2)
+
+        # self_scores = softmax_layer(self_logits)[torch.arange(
+        #     2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
+        # other_scores = softmax_layer(other_logits)[torch.arange(
+        #     2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
+        # flag = torch.ones([2 * batch_size, ]).cuda()
+        # rank_loss = rank_criterion(self_scores, other_scores, flag)
+
+        # raw1_self_loss = criterion(logit1_self, labels1)
+        # raw2_self_loss = criterion(logit2_self, labels2)
         # feature_loss = criterion(features, labels)
 
         # target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
@@ -92,8 +115,10 @@ for epoch in range(start_epoch, 500):
 
         # ---------- pairs attention struct ---------------------
         # total_loss = raw_loss + dist_loss + intra_dist_loss
-        total_loss = raw_loss + raw1_self_loss + raw2_self_loss
+        # total_loss = raw_loss + raw1_self_loss + raw2_self_loss
+        # total_loss = raw1_self_loss + raw2_self_loss
         # total_loss = raw_loss
+        total_loss = softmax_loss + raw_loss
         total_loss.backward()
 
         raw_optimizer.step()
@@ -125,12 +150,12 @@ for epoch in range(start_epoch, 500):
                 idxs = torch.cat([idxs, idxs], dim=0).cuda()
                 batch_size = images.size(0)
 
-                raw_logits, _, raw_features, logits1_self, logits2_self, labels1, labels2 = net(
+                raw_logits, _, raw_features, logits1_self, logits2_other, logits2_self, logits2_other, labels1, labels2 = net(
                     images, labels, idxs)
                 # caculate class loss
                 raw_loss = criterion(raw_logits, labels)
-                raw1_self_loss = criterion(logits1_self, labels1)
-                raw2_self_loss = criterion(logits2_self, labels2)
+                # raw1_self_loss = criterion(logits1_self, labels1)
+                # raw2_self_loss = criterion(logits2_self, labels2)
                 # features_loss = criterion(features, labels)
 
                 # target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
@@ -158,8 +183,8 @@ for epoch in range(start_epoch, 500):
                 train_correct += torch.sum(raw_predict.data == labels.data)
                 # features_loss_total += features_loss
                 raw_losses.update(raw_loss.item(), batch_size)
-                raw1_losses.update(raw1_self_loss.item(), batch_size)
-                raw2_losses.update(raw2_self_loss.item(), batch_size)
+                # raw1_losses.update(raw1_self_loss.item(), batch_size)
+                # raw2_losses.update(raw2_self_loss.item(), batch_size)
                 # dist_losses.update(dist_loss.item(), batch_size)
                 # intra_dist_losses.update(intra_dist_loss.item(), batch_size)
                 # inter_dist_losses.update(inter_dist_loss.item(), batch_size)
@@ -183,7 +208,7 @@ for epoch in range(start_epoch, 500):
                 img, labels, index = data[0].cuda(), data[1].cuda(), data[2]
                 batch_size = img.size(0)
 
-                raw_logits, _, _ = net(img, labels, flag="test")
+                raw_logits = net(img, labels, flag="test")
                 # caculate class loss
                 raw_loss = criterion(raw_logits, labels)
 
@@ -193,7 +218,7 @@ for epoch in range(start_epoch, 500):
                 res = (raw_predict.data == labels.data)
                 # _print(torch.where(res == False))
                 #_print(index[torch.where(res == False)])
-                waTestIndex[index[torch.where(res == False)]] += 1
+                # waTestIndex[index[torch.where(res == False)]] += 1
 
                 test_correct += torch.sum(raw_predict.data == labels.data)
                 test_loss += raw_loss.item() * batch_size

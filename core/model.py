@@ -43,6 +43,7 @@ class MyNet(nn.Module):
 
             # resnet_out, rpn_feature, feature = self.pretrained_model(x)
             raw_logits, _, raw_features = self.pretrained_model(images)
+            raw_logits = self.fc(raw_features)
             # raw_features 2*batch_size
 
             # map1_out = self.map1(raw_features)
@@ -65,6 +66,7 @@ class MyNet(nn.Module):
 
             intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(
                 raw_features, targets)
+
             features1 = torch.cat(
                 [raw_features[intra_pairs[:, 0]], raw_features[inter_pairs[:, 0]]], dim=0)
             # feature1 4*batchsize
@@ -86,19 +88,26 @@ class MyNet(nn.Module):
             gate2 = torch.mul(map2_out, features2)
             gate2 = self.sigmoid(gate2)
 
-            features1_self = torch.mul(gate1, features1)
-            features2_self = torch.mul(gate2, features2)
-            logit1_self = self.fc(self.drop(features1_self))
-            logit2_self = self.fc(self.drop(features2_self))
+            features1_self = torch.mul(gate1, features1) + features1
+            features1_other = torch.mul(gate2, features1) + features1
+            features2_self = torch.mul(gate2, features2) + features2
+            features2_other = torch.mul(gate1, features1) + features2
+
+            logit1_self = self.fc(features1_self)
+            logit1_other = self.fc(features1_other)
+            logit2_self = self.fc(features2_self)
+            logit2_other = self.fc(features2_other)
 
             # inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
             # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
 
             # return raw_logits, _, raw_features, projected_features, intra_pairs_feature, inter_pairs_feature
-            return raw_logits, _, raw_features, logit1_self, logit2_self, labels1, labels2
+            return raw_logits, _, raw_features, logit1_self, logit1_other, logit2_self, logit2_other, labels1, labels2
         else:
-            batch = images.size(0)
-            return self.pretrained_model(images)
+            # batch = images.size(0)
+            raw_logits, _, raw_features = self.pretrained_model(images)
+            # return self.pretrained_model(images)
+            return self.fc(raw_features)
 
     def show_feature_map(self, feature_map):
         feature_map = feature_map.squeeze(0)
@@ -142,7 +151,7 @@ def get_pairs(embeddings, labels):
     inter_pairs = np.zeros([embeddings.shape[0], 2])
     inter_labels = np.zeros([embeddings.shape[0], 2])
 
-    for i in range(batch_size):
+    for i in range(embeddings.shape[0]):
         intra_pairs[i, 0] = i
         intra_pairs[i, 1] = intra_idxs[i]
 

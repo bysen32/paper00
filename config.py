@@ -9,6 +9,8 @@ test_model = "model.ckpt"
 save_dir = "./save/"
 DEV_MODE = True
 TRAIN_CLASS = 20
+# TRAIN_SAMPLE = 5994
+TRAIN_SAMPLE = 600
 VERSION_HEAD = "resnet50 model1 + model2 intra_class"
 
 N_CLASSES = 8
