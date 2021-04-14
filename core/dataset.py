@@ -138,11 +138,47 @@ class CUB_Train:
         return len(self.labels)
 
 
+class CUB_Val:
+    def __init__(self, root=None, dataloader=default_loader):
+        self.transform = transforms.Compose([
+            transforms.Resize([256, 256]),
+            transforms.RandomCrop(INPUT_SIZE),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225))
+        ])
+        self.dataloader = dataloader
+
+        self.root = root
+        self.imgs = []
+        self.labels = []
+
+        with open(os.path.join(self.root, TRAIN_DATASET), 'r') as fid:
+            for line in fid.readlines():
+                img_path, label = line.strip().split()
+                img = self.dataloader(img_path)
+                label = int(label)
+                self.imgs.append(img)
+                self.labels.append(label)
+
+    def __getitem__(self, index):
+        img = self.imgs[index]
+        label = self.labels[index]
+
+        img = self.transform(img)
+
+        return [img, label, index]
+
+    def __len__(self):
+        return len(self.labels)
+
+
 class CUB_Test:
     def __init__(self, root=None, dataloader=default_loader):
         self.transform = transforms.Compose([
             transforms.Resize([256, 256]),
-            transforms.CenterCrop(INPUT_SIZE),
+            transforms.RandomCrop(INPUT_SIZE),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225))
@@ -166,7 +202,6 @@ class CUB_Test:
         label = self.labels[index]
 
         img = self.transform(img)
-        # label = torch.LongTensor([label])
 
         return [img, label, index]
 
@@ -176,10 +211,25 @@ class CUB_Test:
 
 class BatchDataset(Dataset):
     def __init__(self, root=None, dataloader=default_loader):
-        self.transform = transforms.Compose([
+        self.transform1 = transforms.Compose([
+            transforms.RandomRotation(30),
             transforms.Resize([256, 256]),
             transforms.RandomCrop(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(brightness=(0.5, 1.5), contrast=(
+                0.5, 1.5), saturation=(0.5, 1.5)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225))
+        ])
+        # 增强方法2： 关注更小的区域
+        self.transform2 = transforms.Compose([
+            transforms.RandomRotation(20),
+            transforms.Resize([336, 336]),
+            transforms.RandomCrop(INPUT_SIZE),
+            transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(brightness=(0.5, 1.5), contrast=(
+                0.5, 1.5), saturation=(0.5, 1.5)),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225))
@@ -201,8 +251,8 @@ class BatchDataset(Dataset):
         image_name, label = self.imglist[index].strip().split()
         image_path = image_name
         img = self.dataloader(image_path)
-        img1 = self.transform(img)
-        img2 = self.transform(img)
+        img1 = self.transform1(img)
+        img2 = self.transform2(img)
         # images = torch.cat([img1, img2], dim=0)
 
         # label = torch.LongTensor([int(label)])
