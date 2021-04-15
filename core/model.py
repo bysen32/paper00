@@ -26,9 +26,9 @@ class MyNet(nn.Module):
         self.projector = projection_MLP(2048, 512)
 
         # API-Net struct
-        self.fc = torch.nn.Sequential(
-            torch.nn.Dropout(p=0.5),
-            torch.nn.Linear(2048, 200)
+        self.fc = nn.Sequential(
+            nn.Dropout(p=0.5),
+            nn.Linear(2048, 200)
         )
         self.map1 = nn.Linear(2048 * 2, 512)
         self.map2 = nn.Linear(512, 2048)
@@ -42,7 +42,8 @@ class MyNet(nn.Module):
             # images = torch.cat(X, dim=0)  # 2*batch_size
 
             # resnet_out, rpn_feature, feature = self.pretrained_model(x)
-            raw_logits, _, raw_features = self.pretrained_model(images)
+            # raw_logits, _, raw_features = self.pretrained_model(images)
+            _, _, raw_features = self.pretrained_model(images)
             raw_logits = self.fc(raw_features)
             # raw_features 2*batch_size
 

@@ -27,6 +27,10 @@ train_sampler = dataset.BalancedBatchSampler(trainset, N_CLASSES, N_SAMPLES)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_sampler=train_sampler, num_workers=8, pin_memory=True)
 
+valset = dataset.CUB_Val(root="./CUB_200_2011")
+valloader = torch.utils.data.DataLoader(
+    valset, batch_size=100, shuffle=False, num_workers=8, drop_last=False)
+
 # testset = dataset.CUB(root="./CUB_200_2011", is_train=False, data_len=None)
 testset = dataset.CUB_Test(root="./CUB_200_2011")
 testloader = torch.utils.data.DataLoader(
@@ -86,7 +90,7 @@ for epoch in range(start_epoch, 500):
         batch_size = logit1_self.shape[0]
 
         self_logits = torch.zeros(2*batch_size, 200).cuda()
-        other_logits = torch.zeros(2*batch_size, 200).cuda()
+        # other_logits = torch.zeros(2*batch_size, 200).cuda()
         self_logits[:batch_size] = logit1_self
         self_logits[batch_size:] = logit2_self
         # other_logits[:batch_size] = logit1_other
