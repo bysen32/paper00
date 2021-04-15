@@ -96,9 +96,9 @@ for epoch in range(start_epoch, 500):
         other_logits[:batch_size] = logit1_other
         other_logits[batch_size:] = logit2_other
 
-        # logits = torch.cat([self_logits, other_logits], dim=0)
-        targets = torch.cat([labels1, labels2], dim=0)
-        softmax_loss = criterion(self_logits, targets)
+        logits = torch.cat([self_logits, other_logits], dim=0)
+        targets = torch.cat([labels1, labels2, labels1, labels2], dim=0)
+        softmax_loss = criterion(logits, targets)
 
         raw_loss = criterion(raw_logits, labels)
 
