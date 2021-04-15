@@ -84,15 +84,15 @@ class MyNet(nn.Module):
             map2_out = self.map2(map2_out)
 
             gate1 = torch.mul(map2_out, features1)
-            gate1 = self.sigmoid(gate1)
+            # gate1 = self.sigmoid(gate1)
 
             gate2 = torch.mul(map2_out, features2)
-            gate2 = self.sigmoid(gate2)
+            # gate2 = self.sigmoid(gate2)
 
             features1_self = torch.mul(gate1, features1) + features1
             features1_other = torch.mul(gate2, features1) + features1
             features2_self = torch.mul(gate2, features2) + features2
-            features2_other = torch.mul(gate1, features1) + features2
+            features2_other = torch.mul(gate1, features2) + features2
 
             logit1_self = self.fc(features1_self)
             logit1_other = self.fc(features1_other)

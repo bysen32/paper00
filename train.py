@@ -90,11 +90,11 @@ for epoch in range(start_epoch, 500):
         batch_size = logit1_self.shape[0]
 
         self_logits = torch.zeros(2*batch_size, 200).cuda()
-        # other_logits = torch.zeros(2*batch_size, 200).cuda()
+        other_logits = torch.zeros(2*batch_size, 200).cuda()
         self_logits[:batch_size] = logit1_self
         self_logits[batch_size:] = logit2_self
-        # other_logits[:batch_size] = logit1_other
-        # other_logits[batch_size:] = logit2_other
+        other_logits[:batch_size] = logit1_other
+        other_logits[batch_size:] = logit2_other
 
         # logits = torch.cat([self_logits, other_logits], dim=0)
         targets = torch.cat([labels1, labels2], dim=0)
@@ -102,12 +102,12 @@ for epoch in range(start_epoch, 500):
 
         raw_loss = criterion(raw_logits, labels)
 
-        # self_scores = softmax_layer(self_logits)[torch.arange(
-        #     2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
-        # other_scores = softmax_layer(other_logits)[torch.arange(
-        #     2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
-        # flag = torch.ones([2 * batch_size, ]).cuda()
-        # rank_loss = rank_criterion(self_scores, other_scores, flag)
+        self_scores = softmax_layer(self_logits)[torch.arange(
+            2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
+        other_scores = softmax_layer(other_logits)[torch.arange(
+            2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
+        flag = torch.ones([2 * batch_size, ]).cuda()
+        rank_loss = rank_criterion(self_scores, other_scores, flag)
 
         # raw1_self_loss = criterion(logit1_self, labels1)
         # raw2_self_loss = criterion(logit2_self, labels2)
@@ -122,7 +122,7 @@ for epoch in range(start_epoch, 500):
         # total_loss = raw_loss + raw1_self_loss + raw2_self_loss
         # total_loss = raw1_self_loss + raw2_self_loss
         # total_loss = raw_loss
-        total_loss = softmax_loss + raw_loss
+        total_loss = softmax_loss + raw_loss + rank_loss
         total_loss.backward()
 
         raw_optimizer.step()
