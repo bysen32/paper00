@@ -2,11 +2,9 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-from core import resnet
+from . import resnet
 from config import TRAIN_CLASS, TRAIN_SAMPLE
 import numpy as np
-import sys
-sys.path.append("../")
 
 g_Features = {}
 g_Labels = {}

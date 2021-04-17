@@ -2,12 +2,12 @@ import numpy as np
 import scipy.misc
 import os
 from PIL import Image
-from torchvision import transforms
 from config import INPUT_SIZE, DEV_MODE
 import torch
 from torch.utils.data.sampler import BatchSampler
 from torch.utils.data import Dataset
 import core
+from utils import transforms
 
 
 class CUB:
@@ -220,11 +220,12 @@ class BatchDataset(Dataset):
                 0.5, 1.5), saturation=(0.5, 1.5)),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225))
+                                 std=(0.229, 0.224, 0.225)),
+            transforms.RandomErasing(probability=0.5, sh=0.1)
         ])
         # 增强方法2： 关注更小的区域
         self.transform2 = transforms.Compose([
-            transforms.RandomRotation(20),
+            transforms.RandomRotation(30),
             transforms.Resize([336, 336]),
             transforms.RandomCrop(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
@@ -232,7 +233,8 @@ class BatchDataset(Dataset):
                 0.5, 1.5), saturation=(0.5, 1.5)),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225))
+                                 std=(0.229, 0.224, 0.225)),
+            transforms.RandomErasing(probability=0.5, sh=0.1)
         ])
         self.dataloader = dataloader
 
