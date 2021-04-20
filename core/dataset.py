@@ -216,12 +216,12 @@ class BatchDataset(Dataset):
             transforms.Resize([256, 256]),
             transforms.RandomCrop(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=(0.5, 1.5), contrast=(
-                0.5, 1.5), saturation=(0.5, 1.5)),
+            transforms.ColorJitter(brightness=(0.9, 1.1), contrast=(
+                0.9, 1.1), saturation=(0.9, 1.1)),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225)),
-            transforms.RandomErasing(probability=0.5, sh=0.1)
+            transforms.RandomErasing(probability=0.5, sh=0.05)
         ])
         # 增强方法2： 关注更小的区域
         self.transform2 = transforms.Compose([
@@ -229,12 +229,12 @@ class BatchDataset(Dataset):
             transforms.Resize([336, 336]),
             transforms.RandomCrop(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=(0.5, 1.5), contrast=(
-                0.5, 1.5), saturation=(0.5, 1.5)),
+            transforms.ColorJitter(brightness=(0.9, 1.1), contrast=(
+                0.9, 1.1), saturation=(0.9, 1.1)),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225)),
-            transforms.RandomErasing(probability=0.5, sh=0.1)
+            transforms.RandomErasing(probability=0.5, sh=0.05)
         ])
         self.dataloader = dataloader
 

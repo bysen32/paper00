@@ -24,89 +24,58 @@ class MyNet(nn.Module):
         self.projector = projection_MLP(2048, 512)
 
         # API-Net struct
-        self.fc = nn.Sequential(
-            nn.Dropout(p=0.5),
-            nn.Linear(2048, 200)
-        )
+        # self.fc = nn.Sequential(
+        #     nn.Dropout(p=0.5),
+        #     nn.Linear(2048, 200)
+        # )
         self.map1 = nn.Linear(2048 * 2, 512)
         self.map2 = nn.Linear(512, 2048)
         self.drop = nn.Dropout(p=0.5)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, images, targets, idxs=None, flag="train"):
+    def forward(self, images, labels, idxs=None, flag="train"):
         global g_Features, g_Labels
         if flag == "train":
-            batch = targets.size(0)
-            # images = torch.cat(X, dim=0)  # 2*batch_size
+            BS = labels.size(0)
+            raw_logits, _, raw_features = self.pretrained_model(images)
+            raw_features = F.normalize(raw_features, dim=1)
 
-            # resnet_out, rpn_feature, feature = self.pretrained_model(x)
-            # raw_logits, _, raw_features = self.pretrained_model(images)
-            _, _, raw_features = self.pretrained_model(images)
-            raw_logits = self.fc(raw_features)
-            # raw_features 2*batch_size
-
-            # map1_out = self.map1(raw_features)
-            # map1_out = self.drop(map1_out)
-            # projected_features = self.map2(map1_out)
             projected_features = self.projector(raw_features)  # 2048 -> 512
-            # 2* batchsize
 
             # 融合
-            # features = torch.lerp(projected_features[:batch], projected_features[batch:], 0.5)
-            # features = raw_features[:batch]
-            # map1_out = self.map1(raw_features)
-            # map1_out = self.drop(map1_out)
-            # features = self.map2(map1_out)
-            # features = torch.lerp(raw_features[:batch], raw_features[batch:], 0.5)
-
             # for i, f in enumerate(features):
             #     g_Features[idxs[i].item()] = features[i].detach().cpu().numpy()
             #     g_Labels[idxs[i].item()] = targets[i].detach().cpu().numpy()
 
-            intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(
-                raw_features, targets)
+            intra_pairs, inter_pairs, intra_labels, inter_labels = get_pairs(raw_features, labels)
 
-            features1 = torch.cat(
-                [raw_features[intra_pairs[:, 0]], raw_features[inter_pairs[:, 0]]], dim=0)
-            # feature1 4*batchsize
-            features2 = torch.cat(
-                [raw_features[intra_pairs[:, 1]], raw_features[inter_pairs[:, 1]]], dim=0)
-            labels1 = torch.cat(
-                [intra_labels[:, 0], inter_labels[:, 0]], dim=0)
-            labels2 = torch.cat(
-                [intra_labels[:, 1], inter_labels[:, 1]], dim=0)
+            # features1 = torch.cat([raw_features[intra_pairs[:, 0]], raw_features[inter_pairs[:, 0]]], dim=0)
+            # features2 = torch.cat([raw_features[intra_pairs[:, 1]], raw_features[inter_pairs[:, 1]]], dim=0)
+            raw_features_neg = raw_features[inter_pairs[:, 1]]
 
-            mutual_features = torch.cat([features1, features2], dim=1)
+            # labels1 = torch.cat([intra_labels[:, 0], inter_labels[:, 0]], dim=0)
+            # labels2 = torch.cat([intra_labels[:, 1], inter_labels[:, 1]], dim=0)
+
+            mutual_features = torch.cat([raw_features, raw_features_neg], dim=1)
             map1_out = self.map1(mutual_features)
             map2_out = self.drop(map1_out)
             map2_out = self.map2(map2_out)
 
-            gate1 = torch.mul(map2_out, features1)
-            # gate1 = self.sigmoid(gate1)
-
-            gate2 = torch.mul(map2_out, features2)
-            # gate2 = self.sigmoid(gate2)
-
-            features1_self = torch.mul(gate1, features1) + features1
-            features1_other = torch.mul(gate2, features1) + features1
-            features2_self = torch.mul(gate2, features2) + features2
-            features2_other = torch.mul(gate1, features2) + features2
-
-            logit1_self = self.fc(features1_self)
-            logit1_other = self.fc(features1_other)
-            logit2_self = self.fc(features2_self)
-            logit2_other = self.fc(features2_other)
+            gated_features = torch.mul(raw_features, map2_out)
+            gated_features_neg = torch.mul(raw_features_neg, map2_out)
+            # [     : aug_features]
+            # [     :             ]
 
             # inter_pairs_feature = features[inter_pairs[:, 0]], features[inter_pairs[:, 1]]
             # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
 
             # return raw_logits, _, raw_features, projected_features, intra_pairs_feature, inter_pairs_feature
-            return raw_logits, _, raw_features, logit1_self, logit1_other, logit2_self, logit2_other, labels1, labels2
+            return raw_logits, _, raw_features, gated_features, gated_features_neg
         else:
-            # batch = images.size(0)
+            # BS = images.size(0)
             raw_logits, _, raw_features = self.pretrained_model(images)
             # return self.pretrained_model(images)
-            return self.fc(raw_features)
+            return raw_logits
 
     def show_feature_map(self, feature_map):
         feature_map = feature_map.squeeze(0)
