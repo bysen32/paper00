@@ -39,7 +39,6 @@ class SupConLoss(nn.Module):
                              'at least 3 dimensions are required')
         if len(features.shape) > 3:
             features = features.view(features.shape[0], features.shape[1], -1)
-            # 合并最后的维度
 
         batch_size = features.shape[0]
         # mask 做什么的？ 0,1 排除 i=j 情况
@@ -55,6 +54,10 @@ class SupConLoss(nn.Module):
                 raise ValueError(
                     'Num of labels does not match num of features')
             mask = torch.eq(labels, labels.T).float().to(device)
+            """
+            仅仅给定标签数据： - 依据标签数据生成 mask
+            mask: 二维数组，判断 i,j 是否为同类
+            """
         else:
             mask = mask.float().to(device)
 
@@ -71,34 +74,59 @@ class SupConLoss(nn.Module):
         else:
             raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
 
-        # compute logits
+        '''
+        ---------------------------------------------------------------
+        以上都为初始化操作
+        '''
+        # compute logits : i-j matrix
         anchor_dot_contrast = torch.div(
             torch.matmul(anchor_feature, contrast_feature.T),
             self.temperature)
         # for numerical stability
-        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
-        logits = anchor_dot_contrast - logits_max.detach()
+        logits_max, _ = torch.max(
+            anchor_dot_contrast, dim=1, keepdim=True)  # cos相似度最大值
+        # logits = anchor_dot_contrast - logits_max.detach()  # 每个元素 - 列cos_sim最大值
+        logits = anchor_dot_contrast
+        '''
+        logits 每个元素-行最大值(1) 为什么要-1？
+        '''
 
         # tile mask
         mask = mask.repeat(anchor_count, contrast_count)
-        # mask-out self-contrast cases
+        # mask-out self-contrast cases 除了自己全都有
         logits_mask = torch.scatter(
             torch.ones_like(mask),
             1,
             torch.arange(batch_size * anchor_count).view(-1, 1).to(device),
             0
         )
-        mask = mask * logits_mask
+        mask = mask * logits_mask  # 同类与不同类的映射表
+        '''
+        logtis_mask 对角为0其余为1 区分自己和别人
+        mask 区分同类和异类
+        mask * logits_mask 逐元素乘 区分同类为1 异类为0 ii为0
+        此时mask 代表 同类为1，自身、异类为0
+        '''
 
         # compute log_prob
         exp_logits = torch.exp(logits) * logits_mask
+        '''
+        if i == j 0
+        else exp_logits[i,j] = cossin_sim[i,j] - 1
+        '''
+        # ''' exp_logits 对比损失中的分母 '''
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
+        # ''' exp_logits.sum(1) 行和 q^ {\sum^{i*j}} '''
 
-        # compute mean of log-likelihood over positive
+        # 逐行累加
+
+        # compute mean of log-likelihood over positive 正例均值
         mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
 
         # loss
         loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
-        loss = loss.view(anchor_count, batch_size).mean()
+        # 有必要view?
+        # loss = loss.view(anchor_count, batch_size).mean()
+        loss = loss.mean()
 
         return loss

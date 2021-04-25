@@ -90,7 +90,7 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, raw_features, gated_features, gated_features_neg = net(images, labels, idxs)
+        raw_logits, _, raw_features, loss = net(images, labels, idxs)
         # batch_size = logit1_self.shape[0]
 
         # self_logits = torch.zeros(2*batch_size, 200).cuda()
@@ -118,21 +118,19 @@ for epoch in range(start_epoch, 500):
         # target = torch.autograd.Variable(torch.ones(batch_size, 1)).cuda()
         # intra_dist_loss = torch.nn.CosineEmbeddingLoss(reduction="mean")(projected_features[:batch_size], projected_features[batch_size:], target)
 
-        f1, f2 = torch.split(raw_features, [BS, BS], dim=0)
-        features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        label_half = torch.split(labels, [BS, BS], dim=0)[0]
-        supconloss = criterion_con(features, label_half)
+        # f1, f2 = torch.split(raw_features, [BS, BS], dim=0)
+        # features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+        # label_half = torch.split(labels, [BS, BS], dim=0)[0]
+        # supconloss = criterion_con(features, label_half)
 
         # ---------- pairs attention struct ---------------------
         # total_loss = raw_loss + dist_loss + intra_dist_loss
         # total_loss = raw_loss + raw1_self_loss + raw2_self_loss
         # total_loss = raw1_self_loss + raw2_self_loss
-        total_loss = raw_loss + supconloss
+        total_loss = raw_loss + loss
         # total_loss = softmax_loss + raw_loss + rank_loss
         total_loss.backward()
-
         raw_optimizer.step()
-
         progress_bar(i, len(trainloader), "train")
 
     for sch in schedulers:
@@ -166,7 +164,7 @@ for epoch in range(start_epoch, 500):
                 idxs = torch.cat([idxs, idxs], dim=0).cuda()
                 batch_size = images.size(0)
 
-                raw_logits, _, raw_features, gated_features, gated_features_neg = net(
+                raw_logits, _, raw_features, loss = net(
                     images, labels, idxs)
 
                 # 可视化
