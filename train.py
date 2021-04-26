@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 from config import BATCH_SIZE, SAVE_FREQ, LR, resume, save_dir, WD, DEV_MODE, VERSION_HEAD, N_CLASSES, N_SAMPLES, TRAIN_CLASS
 from core import model, dataset, resnet, visible
 from core.utils import init_log, progress_bar, AverageMeter
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from core.losses import SupConLoss
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
@@ -42,7 +42,7 @@ testloader = torch.utils.data.DataLoader(
 net = model.MyNet()
 # net.avgpool = torch.nn.AdaptiveAvgPool2d(1)
 # net.fc = torch.nn.Linear(512 * 4, 200)
-writer = SummaryWriter()
+# writer = SummaryWriter()
 
 # load saved model
 if resume and os.path.isfile(resume):
@@ -90,7 +90,8 @@ for epoch in range(start_epoch, 500):
 
         raw_optimizer.zero_grad()
 
-        raw_logits, _, raw_features, loss = net(images, labels, idxs)
+        raw_logits, _, raw_features, mean_log_prob_pos = net(
+            images, labels, idxs)
         # batch_size = logit1_self.shape[0]
 
         # self_logits = torch.zeros(2*batch_size, 200).cuda()
@@ -105,6 +106,7 @@ for epoch in range(start_epoch, 500):
         # softmax_loss = criterion(logits, targets)
 
         raw_loss = criterion(raw_logits, labels)
+        conloss = -mean_log_prob_pos.mean()  # PairPairConLoss 对比损失
 
         # self_scores = softmax_layer(self_logits)[torch.arange( 2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
         # other_scores = softmax_layer(other_logits)[torch.arange( 2*batch_size).cuda().long(), torch.cat([labels1, labels2], dim=0)]
@@ -127,7 +129,13 @@ for epoch in range(start_epoch, 500):
         # total_loss = raw_loss + dist_loss + intra_dist_loss
         # total_loss = raw_loss + raw1_self_loss + raw2_self_loss
         # total_loss = raw1_self_loss + raw2_self_loss
-        total_loss = raw_loss + loss
+
+        # 测试分阶段训练, 在backbone较为稳定后进行对比学习
+        if epoch < 50:
+            total_loss = raw_loss
+        else:
+            total_loss = raw_loss + conloss
+
         # total_loss = softmax_loss + raw_loss + rank_loss
         total_loss.backward()
         raw_optimizer.step()
@@ -164,7 +172,7 @@ for epoch in range(start_epoch, 500):
                 idxs = torch.cat([idxs, idxs], dim=0).cuda()
                 batch_size = images.size(0)
 
-                raw_logits, _, raw_features, loss = net(
+                raw_logits, _, raw_features, mean_log_prob_pos = net(
                     images, labels, idxs)
 
                 # 可视化

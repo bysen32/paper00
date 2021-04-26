@@ -115,7 +115,7 @@ class MyNet(nn.Module):
 
             log_prob = raw_dot_self_i - torch.log(vs_all_exp_sum)
             mean_log_prob_pos = log_prob.sum(1) / BS
-            loss = - mean_log_prob_pos.mean()
+            # loss = - mean_log_prob_pos.mean()
 
             # mean_log_prob_pos = log_prob.sum(1)
             # loss = mean_log_prob_pos.mean()
@@ -145,7 +145,7 @@ class MyNet(nn.Module):
             # intra_pairs_feature = features[intra_pairs[:, 0]], features[intra_pairs[:, 1]]
 
             # return raw_logits, _, features_raw, projected_features, intra_pairs_feature, inter_pairs_feature
-            return raw_logits, _, features_raw, loss
+            return raw_logits, _, features_raw, mean_log_prob_pos
         else:
             # BS = images.size(0)
             raw_logits, _, features_raw = self.pretrained_model(images)
