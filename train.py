@@ -131,7 +131,7 @@ for epoch in range(start_epoch, 500):
         # total_loss = raw1_self_loss + raw2_self_loss
 
         # 测试分阶段训练, 在backbone较为稳定后进行对比学习
-        if epoch < 50:
+        if epoch < 500:
             total_loss = raw_loss
         else:
             total_loss = raw_loss + conloss
