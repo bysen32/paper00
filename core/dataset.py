@@ -128,11 +128,8 @@ class CUB_Train:
 
         img1 = self.transform(img)
         img2 = self.transform(img)
-        img = torch.cat([img1, img2], dim=0)
-        label = torch.cat([label, label], dim=0)
-        index = torch.cat([index, index], dim=0)
 
-        return [img, label, index]
+        return (img1, img2), label
 
     def __len__(self):
         return len(self.labels)
@@ -168,7 +165,7 @@ class CUB_Val:
 
         img = self.transform(img)
 
-        return [img, label, index]
+        return [img, label]
 
     def __len__(self):
         return len(self.labels)
@@ -203,7 +200,7 @@ class CUB_Test:
 
         img = self.transform(img)
 
-        return [img, label, index]
+        return img, label
 
     def __len__(self):
         return len(self.labels)
@@ -261,7 +258,7 @@ class BatchDataset(Dataset):
         label = int(label)
         # index = torch.LongTensor([index])
 
-        return [(img1, img2), label, index]
+        return (img1, img2), label
 
     def __len__(self):
         return len(self.imglist)
