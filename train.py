@@ -63,12 +63,13 @@ def train(train_loader, model, criterion_encoder, optimizer_encoder, classifier,
         labels = torch.cat([labels, labels], dim=0).cuda()
         BSZ = labels.shape[0]
 
-        # warmup_learning_rate(opt, epoch, i, len(train_loader), optimizer_encoder)
-        # warmup_learning_rate(opt, epoch, i, len(train_loader), optimizer_fc)
+        warmup_learning_rate(opt, epoch, i, len(
+            train_loader), optimizer_encoder)
+        warmup_learning_rate(opt, epoch, i, len(train_loader), optimizer_fc)
 
         features = model(images, labels)
-        # encoder_loss = criterion_encoder(features, labels)
-        # encoder_losses.update(encoder_loss.item(), BSZ)
+        encoder_loss = criterion_encoder(features, labels)
+        encoder_losses.update(encoder_loss.item(), BSZ)
 
         logits = classifier(features)
         fc_loss = criterion_fc(logits, labels)
@@ -77,8 +78,8 @@ def train(train_loader, model, criterion_encoder, optimizer_encoder, classifier,
         acc1, acc5 = accuracy(logits, labels, topk=(1, 5))
         top1.update(acc1[0], BSZ)
 
-        # loss = encoder_loss + fc_loss
-        loss = fc_loss
+        loss = encoder_loss + fc_loss
+        # loss = fc_loss
         losses.update(loss.item(), BSZ)
 
         optimizer_encoder.zero_grad()
