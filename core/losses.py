@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class SupConLoss(nn.Module):
@@ -128,5 +129,92 @@ class SupConLoss(nn.Module):
         # 有必要view?
         # loss = loss.view(anchor_count, batch_size).mean()
         loss = loss.mean()
+
+        return loss
+
+
+class PairPairSupConLoss(nn.Module):
+    def __init__(self, temperature=0.07, contrast_mode='all', base_temperature=0.07):
+        super(PairPairSupConLoss, self).__init__()
+
+        self.temperature = temperature
+        self.contrast_mode = contrast_mode
+        self.base_temperature = base_temperature
+
+    def forward(self, features, labels=None, mask=None):
+        BSZ = features.shape[0]
+        features = F.normalize(features, dim=1)
+
+        # motivation 负样本与不够负的问题
+        # 使用x^other作为负样本，将特征的关注区域产生分歧
+        # 使用特征点乘 计算mutual向量 [i,j] = fi*fj
+        mutual_martix = torch.einsum('ik,jk->ijk', [features, features])
+        # gate_matrix = torch.einsum('->ij',[features, mutual_martix])
+        matrix_gate_i = torch.einsum('ik,ijk->ijk', [features, mutual_martix])
+        matrix_gate_j = torch.einsum('jk,ijk->ijk', [features, mutual_martix])
+
+        features_self_i = torch.einsum(
+            'ik,ijk->ijk', [features, matrix_gate_i]) + features
+        features_self_j = torch.einsum(
+            'jk,ijk->ijk', [features, matrix_gate_j]) + features
+        features_other_i = torch.einsum(
+            'ik,ijk->ijk', [features, matrix_gate_j]) + features
+        features_other_j = torch.einsum(
+            'jk,ijk->ijk', [features, matrix_gate_i]) + features
+
+        # 归一化 便于计算 余弦相似度
+        # features_self_i NxNx2048 ij对比后增强的 特征i
+        features_self_i = F.normalize(features_self_i, dim=2)
+        features_self_j = F.normalize(features_self_j, dim=2)
+        features_other_i = F.normalize(features_other_i, dim=2)
+        features_other_j = F.normalize(features_other_j, dim=2)
+
+        '''
+                    exp(features * features_self_i)
+        Sum -log ---------------------------------------
+                    Sum exp(features * features_self_i) + Sum exp(features * features_self_j)
+                    + Sum exp(features * features_other_i) + Sum exp(features * features_other_j)
+        新想法？设计方案
+        1. 计算出所有的X-self 和 X-other
+        2. 改两两对比为 1:N-1
+        3. 计算新的对比损失函数
+        4. 进行实验
+        5. 分析其物理含义
+        '''
+
+        logits_mask = ((torch.eye(BSZ) - 1) * -1).cuda()
+
+        raw_dot_self_i = torch.einsum(
+            'ik,ijk->ij', [features, features_self_i]) / self.temperature
+        exp_raw_dot_self_i = torch.exp(raw_dot_self_i) * logits_mask
+
+        raw_dot_self_j = torch.einsum(
+            'ik,ijk->ij', [features, features_other_j]) / self.temperature
+        exp_raw_dot_self_j = torch.exp(raw_dot_self_j) * logits_mask
+
+        raw_dot_other_i = torch.einsum(
+            'ik,ijk->ij', [features, features_other_i]) / self.temperature
+        exp_raw_dot_other_i = torch.exp(raw_dot_other_i) * logits_mask
+
+        raw_dot_other_j = torch.einsum(
+            'ik,ijk->ij', [features, features_other_j]) / self.temperature
+        exp_raw_dot_other_j = torch.exp(raw_dot_other_j) * logits_mask
+
+        sum_exp_raw_dot_self_i = torch.einsum('ij->i', exp_raw_dot_self_i)
+        sum_exp_raw_dot_self_j = torch.einsum('ij->i', exp_raw_dot_self_j)
+        sum_exp_raw_dot_other_i = torch.einsum(
+            'ij->i', exp_raw_dot_other_i)
+        sum_exp_raw_dot_other_j = torch.einsum(
+            'ij->i', exp_raw_dot_other_j)
+
+        # log_prob = torch.log(sum_exp_raw_dot_self_i) - torch.log(sum_exp_raw_dot_self_i + sum_exp_raw_dot_self_j + sum_exp_raw_dot_other_i + sum_exp_raw_dot_other_j)
+
+        vs_all_exp_sum = torch.einsum('ij->i', exp_raw_dot_self_i + exp_raw_dot_self_j +
+                                      exp_raw_dot_other_i + exp_raw_dot_other_j)
+        vs_all_exp_sum = vs_all_exp_sum.view(-1, 1)
+
+        log_prob = raw_dot_self_i - torch.log(vs_all_exp_sum)
+        mean_log_prob_pos = log_prob.sum(1) / BSZ
+        loss = - mean_log_prob_pos.mean()
 
         return loss
